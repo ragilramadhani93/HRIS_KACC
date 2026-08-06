@@ -23,6 +23,12 @@ jobs:
   build-apk:
     name: Build APK (debug)
     runs-on: ubuntu-latest
+    # GitHub-hosted ubuntu runners ship a pre-installed Android SDK
+    # (/usr/local/lib/android/sdk) that already includes platform-tools,
+    # platforms;android-35 and build-tools;35.0.0 — no sdkmanager install needed.
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -48,11 +54,6 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Set up Android SDK (platform 35)
-        uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools,platforms;android-35,build-tools;35.0.0'
-
       - name: Set up Gradle cache
         uses: gradle/actions/setup-gradle@v4
 
@@ -60,6 +61,9 @@ jobs:
         working-directory: android
         run: |
           chmod +x gradlew
+          # Accept SDK licenses (pre-installed on runner) so Gradle can
+          # auto-download any missing components if needed.
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
           ./gradlew assembleDebug --no-daemon
 
       - name: Upload APK artifact
