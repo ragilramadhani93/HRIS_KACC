@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, ArrowLeft, Building2, CalendarDays, Camera, CheckCircle, ChevronRight,
-  Clock, FileText, Fingerprint, LogIn, LogOut, MapPin, Printer, RefreshCw, Search,
-  ShieldCheck, Upload, User, Wallet, XCircle,
+  Clock, FileText, Fingerprint, LogIn, LogOut, MapPin, Printer, RefreshCw, ScanFace,
+  Search, ShieldCheck, Upload, User, Wallet, XCircle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { findBestMatch } from '../../lib/faceMatch';
@@ -173,15 +173,36 @@ function CameraOverlay({ emp, outlet, onClose, onDone }: {
           .select('*, employee:employees!inner(*)')
           .eq('status', 'verified');
         const myProfiles = (fps ?? []).filter((fp: any) => fp?.employee?.id === emp.id);
-        if (myProfiles.length > 0) {
+        if (emp.face_registered) {
+          // Face is required: a verified profile must exist and score >= 40.
+          if (myProfiles.length === 0) {
+            setFaceScore(null);
+            setFaceNote('Belum ada profil wajah terverifikasi.');
+            setMsg('Wajah belum terdaftar/terverifikasi. Daftarkan wajah Anda di tab Profil, atau hubungi HR.');
+            setState('error');
+            return;
+          }
           const res = await findBestMatch(b, myProfiles as FaceProfile[]);
           const conf = res?.confidence ?? 0;
           setFaceScore(conf);
-          if (res && conf >= 40) setFaceNote(`Wajah cocok (${conf.toFixed(0)}%)`);
-          else setFaceNote(`Wajah tidak dikenali (${conf.toFixed(0)}%) — lanjut manual?`);
+          if (conf >= 40) {
+            setFaceNote(`Wajah cocok (${conf.toFixed(0)}%)`);
+          } else {
+            setMsg(`Wajah tidak dikenali (${conf.toFixed(0)}%). Pastikan pencahayaan cukup dan wajah terlihat jelas.`);
+            setState('error');
+            return;
+          }
         } else {
-          setFaceScore(null);
-          setFaceNote('Belum ada wajah terdaftar — mode manual');
+          // Not registered: selfie + GPS manual mode, optional soft check.
+          if (myProfiles.length > 0) {
+            const res = await findBestMatch(b, myProfiles as FaceProfile[]);
+            const conf = res?.confidence ?? 0;
+            setFaceScore(conf);
+            setFaceNote(conf >= 40 ? `Wajah cocok (${conf.toFixed(0)}%)` : `Wajah tidak dikenali (${conf.toFixed(0)}%) — lanjut manual?`);
+          } else {
+            setFaceScore(null);
+            setFaceNote('Belum ada wajah terdaftar — mode manual (selfie + GPS)');
+          }
         }
       } catch {
         setFaceScore(null);
@@ -190,6 +211,14 @@ function CameraOverlay({ emp, outlet, onClose, onDone }: {
       setState('confirm');
     }, 'image/jpeg', 0.85);
   };
+
+  // Hard gate: never allow a registered employee to bypass a failed face check.
+  useEffect(() => {
+    if (state === 'confirm' && emp.face_registered && (faceScore == null || faceScore < 40)) {
+      setMsg('Verifikasi wajah gagal. Silakan coba lagi.');
+      setState('error');
+    }
+  }, [state, emp.face_registered, faceScore]);
 
   // Determine action (check-in vs check-out) from today's record
   const [todayAtt, setTodayAtt] = useState<AttRow | null>(null);
@@ -274,7 +303,7 @@ function CameraOverlay({ emp, outlet, onClose, onDone }: {
   };
 
   useEffect(() => {
-    if (state === 'success' || state === 'error') {
+    if (state === 'success') {
       const t = setTimeout(() => { onDone(); }, 2600);
       return () => clearTimeout(t);
     }
@@ -439,9 +468,186 @@ function geofenceLabel(outlet: OutletView, gps: { lat: number; lng: number }): s
   return d <= (outlet.geofence_radius_meters ?? 300) ? 'Di dalam area' : 'Di luar area';
 }
 
+// ─── Face self-registration (no admin needed) ────────────────────────────────
+type RegStep = 'front' | 'left' | 'right';
+const REG_STEPS: Array<{ key: RegStep; label: string; hint: string }> = [
+  { key: 'front', label: 'Depan', hint: 'Hadap kamera langsung' },
+  { key: 'left', label: 'Kiri', hint: 'Miringkan sedikit ke kiri' },
+  { key: 'right', label: 'Kanan', hint: 'Miringkan sedikit ke kanan' },
+];
+
+function FaceRegisterOverlay({ emp, onClose, onDone }: { emp: EmpView; onClose: () => void; onDone: () => void }) {
+  const [stepIdx, setStepIdx] = useState(0);
+  const [photos, setPhotos] = useState<Record<string, string | null>>({ front: null, left: null, right: null });
+  const [live, setLive] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const step = REG_STEPS[stepIdx];
+  const done = stepIdx >= REG_STEPS.length;
+  const allCaptured = REG_STEPS.every((s) => !!photos[s.key]);
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    setLive(false);
+  }, []);
+
+  useEffect(() => () => stopCamera(), [stopCamera]);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
+      streamRef.current = stream;
+      setLive(true);
+    } catch {
+      setMsg('Kamera tidak dapat diakses. Periksa izin kamera di pengaturan browser.');
+    }
+  };
+
+  useEffect(() => {
+    if (live && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [live]);
+
+  const capture = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext('2d')!;
+    canvasRef.current.width = videoRef.current.videoWidth;
+    canvasRef.current.height = videoRef.current.videoHeight;
+    ctx.drawImage(videoRef.current, 0, 0);
+    canvasRef.current.toBlob(async (b) => {
+      if (!b) return;
+      const fileName = `face_${emp.id}_${step.key}_${Date.now()}.jpg`;
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('face-photos')
+        .upload(fileName, b, { contentType: 'image/jpeg', upsert: true });
+      if (uploadErr || !uploadData) { setMsg('Gagal mengunggah foto. Coba lagi.'); return; }
+      const url = supabase.storage.from('face-photos').getPublicUrl(uploadData.path).data.publicUrl;
+      setPhotos((p) => ({ ...p, [step.key]: url }));
+      stopCamera();
+      setStepIdx((i) => i + 1);
+    }, 'image/jpeg', 0.85);
+  };
+
+  const save = async () => {
+    if (!allCaptured) return;
+    setSaving(true);
+    const { error } = await supabase.from('face_profiles').upsert({
+      employee_id: emp.id,
+      photo_front_url: photos.front,
+      photo_left_url: photos.left,
+      photo_right_url: photos.right,
+      status: 'verified',
+      registered_at: new Date().toISOString(),
+      verified_at: new Date().toISOString(),
+    }, { onConflict: 'employee_id' });
+    if (!error) {
+      await supabase.from('employees').update({ face_registered: true }).eq('id', emp.id);
+    }
+    setSaving(false);
+    if (error) { setMsg(`Gagal menyimpan: ${error.message}`); return; }
+    onDone();
+  };
+
+  return (
+    <div className="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-sm flex flex-col">
+      <div className="flex items-center justify-between px-5 pt-12 pb-2">
+        <button onClick={() => { stopCamera(); onClose(); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1.5">
+          <XCircle size={15} /> Batal
+        </button>
+        <span className="text-white/70 text-sm font-medium">Daftarkan Wajah</span>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 pb-8">
+        {!done ? (
+          <div className="flex flex-col items-center gap-5 pt-2">
+            {/* Step indicator */}
+            <div className="flex gap-3">
+              {REG_STEPS.map((s, i) => (
+                <div key={s.key} className={`flex items-center gap-1.5 text-[11px] font-semibold ${i < stepIdx ? 'text-emerald-400' : i === stepIdx ? 'text-white' : 'text-slate-500'}`}>
+                  {i < stepIdx ? <CheckCircle size={13} /> : <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${i === stepIdx ? 'bg-blue-600' : 'bg-slate-700'}`}>{i + 1}</span>}
+                  {s.label}
+                </div>
+              ))}
+            </div>
+
+            <div className="text-center">
+              <p className="text-white font-bold text-lg">Foto {step.label} — hadapkan wajah</p>
+              <p className="text-slate-400 text-xs mt-1">{step.hint} · pastikan pencahayaan cukup</p>
+            </div>
+
+            {live ? (
+              <div className="relative w-full max-w-sm rounded-3xl overflow-hidden bg-black border border-blue-500/50 aspect-[3/4]">
+                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-44 h-52 rounded-full border-4 border-blue-400/70 border-dashed" />
+                </div>
+                <div className="absolute bottom-3 left-0 right-0 flex justify-center">
+                  <span className="bg-black/50 text-white text-[11px] px-3 py-1.5 rounded-full">Posisikan wajah dalam lingkaran</span>
+                </div>
+              </div>
+            ) : (
+              <div className="w-full max-w-sm aspect-[3/4] rounded-3xl border-2 border-dashed border-slate-700 flex flex-col items-center justify-center gap-3 text-slate-500 bg-slate-900/40">
+                <ScanFace size={40} />
+                <p className="text-xs">{photos[step.key] ? 'Foto siap — lanjut langkah berikutnya' : `Foto ${step.label} belum diambil`}</p>
+              </div>
+            )}
+            <canvas ref={canvasRef} className="hidden" />
+
+            {msg && <p className="text-red-400 text-xs text-center">{msg}</p>}
+
+            <div className="flex gap-3 w-full max-w-sm">
+              {live ? (
+                <>
+                  <button onClick={stopCamera} className="flex-1 py-3.5 rounded-2xl border border-white/20 text-white text-sm font-semibold">Ulangi</button>
+                  <button onClick={capture} className="flex-[2] py-3.5 rounded-2xl bg-blue-600 text-white text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+                    <Camera size={16} /> Ambil Foto {step.label}
+                  </button>
+                </>
+              ) : (
+                <button onClick={startCamera} className="w-full py-3.5 rounded-2xl bg-blue-600 text-white text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
+                  <Camera size={16} /> Buka Kamera
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-5 pt-4">
+            <div className="text-center">
+              <p className="text-white font-bold text-lg">Foto wajah terkumpul ✅</p>
+              <p className="text-slate-400 text-xs mt-1">3 sudut wajah sudah direkam. Simpan untuk mengaktifkan absen wajah.</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 w-full max-w-sm">
+              {REG_STEPS.map((s) => (
+                <div key={s.key} className="aspect-[3/4] rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
+                  {photos[s.key] ? <img src={photos[s.key]!} alt={s.label} className="w-full h-full object-cover" /> : <div className="flex items-center justify-center h-full text-slate-600"><Camera size={20} /></div>}
+                </div>
+              ))}
+            </div>
+            {msg && <p className="text-red-400 text-xs">{msg}</p>}
+            <button onClick={save} disabled={saving}
+              className="w-full max-w-sm py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold active:scale-[0.98] transition-all shadow-lg shadow-emerald-900/30 disabled:opacity-50">
+              {saving ? 'Menyimpan...' : <><ShieldCheck size={18} className="inline mr-2 align-middle" />Simpan & Aktifkan Absen Wajah</>}
+            </button>
+            <button onClick={() => { stopCamera(); setStepIdx(0); setPhotos({ front: null, left: null, right: null }); setMsg(''); }}
+              className="text-slate-500 hover:text-slate-300 text-xs flex items-center gap-1.5">
+              <RefreshCw size={12} /> Foto ulang dari awal
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Absen tab ────────────────────────────────────────────────────────────────
-function AbsenTab({ emp, outlet, onOutletChange, onOpenCamera, onRefreshKey }: {
-  emp: EmpView; outlet: OutletView; onOutletChange: (o: OutletView) => void; onOpenCamera: () => void; onRefreshKey: number;
+function AbsenTab({ emp, outlet, onOutletChange, onOpenCamera, onRegisterFace, onRefreshKey }: {
+  emp: EmpView; outlet: OutletView; onOutletChange: (o: OutletView) => void; onOpenCamera: () => void; onRegisterFace: () => void; onRefreshKey: number;
 }) {
   const [clock, setClock] = useState(new Date());
   const [todayAtt, setTodayAtt] = useState<AttRow | null>(null);
@@ -582,9 +788,18 @@ function AbsenTab({ emp, outlet, onOutletChange, onOpenCamera, onRefreshKey }: {
             <CheckCircle size={16} /> Shift selesai — sampai jumpa!
           </div>
         )}
-        <p className="text-center text-[11px] text-slate-400 mt-3">
-          Absen menggunakan {emp.face_registered ? 'verifikasi wajah' : 'foto selfie + lokasi GPS'}
-        </p>
+        {emp.face_registered ? (
+          <p className="text-center text-[11px] text-emerald-600 font-medium mt-3 flex items-center justify-center gap-1">
+            <ShieldCheck size={11} /> Absen wajib verifikasi wajah (skor ≥ 40%)
+          </p>
+        ) : (
+          <button
+            onClick={onRegisterFace}
+            className="mt-3 w-full rounded-xl border border-dashed border-blue-300 bg-blue-50/60 py-2.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+          >
+            <ScanFace size={13} /> Daftarkan Wajah untuk Absen Wajah
+          </button>
+        )}
       </div>
 
       {/* Recent */}
@@ -1127,6 +1342,7 @@ export function EmployeeApp({ onExit }: { onExit: () => void }) {
   const [emp, setEmp] = useState<EmpView | null>(null);
   const [outlet, setOutlet] = useState<OutletView | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [regOpen, setRegOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [ready, setReady] = useState(false);
 
@@ -1189,6 +1405,7 @@ export function EmployeeApp({ onExit }: { onExit: () => void }) {
               outlet={outlet}
               onOutletChange={setOutlet}
               onOpenCamera={() => setCameraOpen(true)}
+              onRegisterFace={() => setRegOpen(true)}
               onRefreshKey={refreshKey}
             />
           )}
@@ -1225,6 +1442,19 @@ export function EmployeeApp({ onExit }: { onExit: () => void }) {
             outlet={outlet}
             onClose={() => setCameraOpen(false)}
             onDone={() => { setCameraOpen(false); setRefreshKey((k) => k + 1); }}
+          />
+        )}
+
+        {/* Face registration overlay */}
+        {regOpen && emp && (
+          <FaceRegisterOverlay
+            emp={emp}
+            onClose={() => setRegOpen(false)}
+            onDone={() => {
+              setRegOpen(false);
+              setEmp((e) => (e ? { ...e, face_registered: true } : e));
+              setRefreshKey((k) => k + 1);
+            }}
           />
         )}
       </div>

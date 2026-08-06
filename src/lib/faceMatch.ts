@@ -16,7 +16,12 @@ const BINS  = 64;
 async function loadImageData(src: string): Promise<ImageData | null> {
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    // Only request cross-origin for http(s) URLs. Local storage photos are
+    // data-URLs (same-origin); setting crossOrigin on those makes the browser
+    // reject them as CORS failures, so matches would always score 0.
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => {
       const c = document.createElement('canvas');
       c.width  = THUMB;
