@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, CheckCircle, XCircle, ChevronRight, Upload, FileText, Building2, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input, Select, Textarea } from '../ui/Input';
 import { Table } from '../ui/Table';
 import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
-import { Card } from '../ui/Card';
+
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../ui/Toast';

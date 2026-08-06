@@ -1,6 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Bell, Check, CheckCheck } from 'lucide-react';
-import { Card } from '../ui/Card';
+import { useEffect, useState } from 'react';
+import { Bell, CheckCheck } from 'lucide-react';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
@@ -18,7 +17,7 @@ const TYPE_COLORS: Record<NotificationType, string> = {
   approval: 'bg-teal-100 text-teal-700',
 };
 
-export function NotificationsPanel({ onClose }: { onClose?: () => void }) {
+export function NotificationsPanel() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);

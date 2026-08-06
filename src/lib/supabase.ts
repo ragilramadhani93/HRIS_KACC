@@ -1,7 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
-import type { Database } from './database.types';
+/**
+ * SmartHRIS database client.
+ *
+ * The app previously depended on Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).
+ * It now uses a built-in, browser-local database (see ./localDb.ts) that exposes
+ * the same API surface — queries, joins, mutations, auth, storage, realtime —
+ * with zero environment variables and no external service.
+ */
+import { LocalDatabase } from './localDb';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey);
+export const supabase = new LocalDatabase();

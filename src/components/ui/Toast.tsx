@@ -50,17 +50,27 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           <div
             key={t.id}
             className={cn(
-              'bg-white border border-slate-200 border-l-4 rounded-lg shadow-lg p-4 flex gap-3 items-start pointer-events-auto',
-              'animate-in slide-in-from-right-4 fade-in duration-200',
+              'bg-white border border-slate-100 border-l-4 rounded-2xl shadow-toast p-4 flex gap-3 items-start pointer-events-auto',
+              'slide-in-right',
               borders[t.type]
             )}
           >
-            {icons[t.type]}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-slate-900">{t.title}</p>
-              {t.message && <p className="text-xs text-slate-500 mt-0.5">{t.message}</p>}
+            <div className={cn(
+              'p-1 rounded-full flex-shrink-0',
+              t.type === 'success' ? 'bg-emerald-50' :
+              t.type === 'error' ? 'bg-red-50' :
+              t.type === 'warning' ? 'bg-amber-50' : 'bg-blue-50'
+            )}>
+              {icons[t.type]}
             </div>
-            <button onClick={() => remove(t.id)} className="text-slate-400 hover:text-slate-600 flex-shrink-0">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-slate-900">{t.title}</p>
+              {t.message && <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{t.message}</p>}
+            </div>
+            <button
+              onClick={() => remove(t.id)}
+              className="p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 flex-shrink-0 transition-all"
+            >
               <X size={14} />
             </button>
           </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Search, Edit2, Trash2, Building2, MapPin } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input, Select, Textarea } from '../ui/Input';

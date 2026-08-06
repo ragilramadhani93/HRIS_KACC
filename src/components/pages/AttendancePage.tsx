@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Camera, CheckCircle, AlertCircle, MapPin, RefreshCw, X, ShieldCheck, ShieldX, Clock, Download, Search, Filter } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
@@ -8,7 +8,7 @@ import { Modal } from '../ui/Modal';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../ui/Toast';
-import { haversineDistance, formatDate, STATUS_COLORS, createNotification } from '../../lib/utils';
+import { haversineDistance, STATUS_COLORS, createNotification } from '../../lib/utils';
 import type { Attendance, Employee, Outlet, ShiftTemplate } from '../../lib/database.types';
 
 // ─── Webcam capture ────────────────────────────────────────
@@ -244,7 +244,7 @@ export function FaceRegistrationPage() {
               key: 'actions', header: '',
               render: (e) => {
                 if (!isAdmin) return null;
-                const fp = faceProfiles[e.id] as { photo_front_url?: string | null; photo_left_url?: string | null; photo_right_url?: string | null; id: string; status?: string } | undefined;
+                const fp = faceProfiles[e.id] as unknown as { photo_front_url?: string | null; photo_left_url?: string | null; photo_right_url?: string | null; id: string; status?: string } | undefined;
                 if (!fp || fp.status === 'verified') return null;
                 return (
                   <div className="flex gap-1 justify-end">

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
-import { BarChart3, Users, Calendar, TrendingUp, Download, Search, Filter, FileText, DollarSign, Clock, ChevronDown, ChevronRight } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import * as React from 'react';
+import { BarChart3, Users, Calendar, TrendingUp, Download, Search, FileText, DollarSign, Clock, ChevronDown, ChevronRight } from 'lucide-react';
 import { Card } from '../ui/Card';
-import { Select } from '../ui/Input';
+
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
@@ -66,11 +67,10 @@ function OverviewTab({ companyId, year, month }: { companyId: string; year: numb
         .gte('overtime_date', periodStart).lte('overtime_date', periodEnd).eq('status', 'approved')
         .in('employee_id', supabase.from('employees').select('id').eq('company_id', companyId) as any),
       supabase.from('payroll_runs').select('total_net').eq('company_id', companyId).eq('period_year', year).eq('period_month', month),
-      supabase.from('outlets').select('id, name'),
     ]).then(([
       { count: total }, { count: active }, { count: outletCnt },
       { data: todayAtt }, { data: attData },
-      { data: empDept }, { data: otData }, { data: payData }, { data: outletData },
+      { data: empDept }, { data: otData }, { data: payData },
     ]) => {
       const presentToday = (todayAtt ?? []).filter((a) => ['present','overtime'].includes(a.status)).length;
       const lateToday    = (todayAtt ?? []).filter((a) => a.status === 'late').length;

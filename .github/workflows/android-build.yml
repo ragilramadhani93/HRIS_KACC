@@ -1,0 +1,82 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# SmartHRIS Karyawan — Android APK Builder
+#
+# Runs automatically on every push to main/master, or manually via the
+# "Run workflow" button (Actions tab).
+#
+# What it does:
+#   1. Installs npm dependencies & builds the web app (dist/)
+#   2. Syncs the web build into the native android/ project (cap sync)
+#   3. Builds a debug APK with JDK 21 + Android SDK 35
+#   4. Uploads the APK as an artifact you can download & install on phones
+#
+# Download the APK:  GitHub → Actions → "Build Android APK" → run → Artifacts
+# ─────────────────────────────────────────────────────────────────────────────
+name: Build Android APK
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch: {}
+
+jobs:
+  build-apk:
+    name: Build APK (debug)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Sync Capacitor (copy web build into android/)
+        run: npx cap sync android
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK (platform 35)
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools,platforms;android-35,build-tools;35.0.0'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartHRIS-Karyawan-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+      # Optional: create a signed release APK later.
+      # Add the KEYSTORE_* secrets in Settings → Secrets → Actions, then
+      # uncomment this step and the signing config in android/app/build.gradle.
+      # - name: Build release APK
+      #   working-directory: android
+      #   run: ./gradlew assembleRelease --no-daemon
+      # - name: Upload release APK
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: SmartHRIS-Karyawan-Release-APK
+      #     path: android/app/build/outputs/apk/release/app-release-unsigned.apk

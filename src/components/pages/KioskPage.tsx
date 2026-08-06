@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Camera, CheckCircle, XCircle, Clock, MapPin, RefreshCw, GitBranch, User, LogIn, LogOut } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Camera, CheckCircle, XCircle, MapPin, RefreshCw, GitBranch, User, LogIn, LogOut } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
-import { haversineDistance, formatTime, STATUS_COLORS } from '../../lib/utils';
+import { haversineDistance, STATUS_COLORS } from '../../lib/utils';
 import { Badge } from '../ui/Badge';
 import { findBestMatch } from '../../lib/faceMatch';
 import type { FaceProfile } from '../../lib/faceMatch';

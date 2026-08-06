@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Shield, Edit2, Search, Plus, Eye, EyeOff, Link2 } from 'lucide-react';
 import { Table } from '../ui/Table';
 import { Modal } from '../ui/Modal';
@@ -7,7 +7,7 @@ import { Select, Input } from '../ui/Input';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
 import { useToast } from '../ui/Toast';
-import { formatDate, ROLE_LABELS, STATUS_COLORS } from '../../lib/utils';
+import { formatDate, ROLE_LABELS } from '../../lib/utils';
 import type { UserProfile, AppRole, Employee } from '../../lib/database.types';
 
 export function UserManagementPage() {

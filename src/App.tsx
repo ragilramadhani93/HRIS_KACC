@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { AuthProvider, useAuth } from './lib/auth';
 import { ToastProvider } from './components/ui/Toast';
 import { AppLayout } from './components/layout/AppLayout';
@@ -15,6 +15,7 @@ import { ReportsPage } from './components/pages/ReportsPage';
 import { KioskPage } from './components/pages/KioskPage';
 import { NotificationsPanel, useUnreadCount } from './components/pages/NotificationsPage';
 import { UserManagementPage } from './components/pages/UserManagementPage';
+import { EmployeeApp } from './components/pages/EmployeeApp';
 import { Modal } from './components/ui/Modal';
 
 const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
@@ -52,7 +53,12 @@ function AppContent() {
     );
   }
 
-  if (!user) return <AuthPage />;
+  // Employee mobile app — clock-in without login
+  if (currentPage === 'employee-app') {
+    return <EmployeeApp onExit={() => setCurrentPage('dashboard')} />;
+  }
+
+  if (!user) return <AuthPage onEmployeeMode={() => setCurrentPage('employee-app')} />;
 
   const pageInfo = PAGE_TITLES[currentPage] ?? { title: currentPage };
   const orgTab = ['companies', 'regions', 'areas', 'outlets'].includes(currentPage) ? currentPage : 'companies';
@@ -93,7 +99,7 @@ function AppContent() {
       </AppLayout>
 
       <Modal isOpen={notifOpen} onClose={() => setNotifOpen(false)} title="" size="md">
-        <NotificationsPanel onClose={() => setNotifOpen(false)} />
+        <NotificationsPanel />
       </Modal>
     </>
   );

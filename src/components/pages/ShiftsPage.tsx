@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Edit2, Calendar, Users, Store, Trash2, Check, X, Info } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input, Select } from '../ui/Input';
@@ -281,7 +281,7 @@ function OutletScheduleTab() {
                     <thead>
                       <tr>
                         <th className="text-left text-xs font-semibold text-slate-400 pb-3 w-36">Shift</th>
-                        {DAYS.map((d, i) => (
+                        {DAYS.map((_, i) => (
                           <th key={i} className={`text-center text-xs font-semibold pb-3 w-16 ${i === 0 ? 'text-rose-400' : i === 6 ? 'text-amber-500' : 'text-slate-500'}`}>
                             {DAY_SHORT[i]}
                           </th>
@@ -423,7 +423,7 @@ function OutletScheduleTab() {
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">Hari</label>
             <div className="flex gap-2 flex-wrap">
-              {DAYS.map((d, i) => (
+              {DAYS.map((_, i) => (
                 <button
                   key={i}
                   type="button"

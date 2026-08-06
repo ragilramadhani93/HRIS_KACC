@@ -1,11 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, CheckCircle, XCircle, ChevronRight, Settings, Upload, Receipt } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input, Select, Textarea } from '../ui/Input';
 import { Table } from '../ui/Table';
 import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
-import { Card } from '../ui/Card';
 import { Tabs } from '../ui/Tabs';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
@@ -94,7 +93,7 @@ function ExpenseClaimsTab() {
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState({ category_id: '', claim_date: '', title: '', description: '', amount: '' });
-  const fileRef = React.useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const isAdmin = role && ['super_admin', 'hr_admin', 'supervisor', 'area_manager', 'regional_manager'].includes(role);
 

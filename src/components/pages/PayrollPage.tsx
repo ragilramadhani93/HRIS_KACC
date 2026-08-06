@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Plus, Play, CheckCircle, DollarSign, Eye, Settings, FileText, Printer, Edit2, Download, Search } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input, Select, Textarea } from '../ui/Input';
 import { Table } from '../ui/Table';
 import { Modal } from '../ui/Modal';
 import { Badge } from '../ui/Badge';
-import { Card, StatCard } from '../ui/Card';
+import { StatCard } from '../ui/Card';
 import { Tabs } from '../ui/Tabs';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
@@ -502,12 +502,8 @@ function PayrollItemsModal({ run, onClose }: { run: PayrollRun; onClose: () => v
                 const emp = item.employee as { full_name?: string; employee_code?: string; job_title?: string; salary_scheme?: string; daily_rate?: number; basic_salary?: number };
                 const isDaily = emp?.salary_scheme === 'daily';
                 const attRate = item.work_days > 0 ? Math.round((item.present_days + item.late_days) / item.work_days * 100) : 0;
-                // Estimate incentive total from earnings - base
-                const baseEst = isDaily
-                  ? (emp?.daily_rate ?? 0) * (item.present_days + item.late_days)
-                  : (emp?.basic_salary ?? 0);
-                const incentiveEst = Math.max(0, item.total_earnings - baseEst - 1000000); // approx
 
+  
                 return (
                   <tr key={item.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3">

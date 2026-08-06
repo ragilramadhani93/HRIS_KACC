@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { GitBranch, Eye, EyeOff, Mail, Lock, Camera, CheckCircle, XCircle, RefreshCw, User, LogIn, LogOut, ChevronLeft } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { GitBranch, Eye, EyeOff, Mail, Lock, Camera, CheckCircle, XCircle, RefreshCw, User, LogIn, LogOut, ChevronLeft, ChevronRight, Smartphone } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
 import { useAuth } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
-import { haversineDistance, STATUS_COLORS } from '../../lib/utils';
+import { haversineDistance } from '../../lib/utils';
 import type { Employee, Outlet, ShiftTemplate } from '../../lib/database.types';
 import { findBestMatch } from '../../lib/faceMatch';
 import type { FaceProfile } from '../../lib/faceMatch';
@@ -116,9 +116,9 @@ function KioskPanel({ onBack }: { onBack: () => void }) {
 
       setConfidence(conf);
       const today = new Date().toISOString().split('T')[0];
-      const { data: att } = await supabase.from('attendance').select('*').eq('employee_id', employee.id).eq('attendance_date', today).maybeSingle();
+      const { data: att } = await supabase.from('attendance').select('*').eq('employee_id', emp.id).eq('attendance_date', today).maybeSingle();
       const action: 'check_in' | 'check_out' = att?.check_in_time && !att?.check_out_time ? 'check_out' : 'check_in';
-      setMatched({ employee, action, existingAttId: att?.id });
+      setMatched({ employee: emp, action, existingAttId: att?.id });
       setState('confirm');
     }, 'image/jpeg', 0.85);
   };
@@ -348,7 +348,7 @@ function KioskPanel({ onBack }: { onBack: () => void }) {
 }
 
 // ─── Auth Page ────────────────────────────────────────────────────────────────
-export function AuthPage() {
+export function AuthPage({ onEmployeeMode }: { onEmployeeMode?: () => void }) {
   const [mode, setMode] = useState<'login' | 'kiosk'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -357,7 +357,7 @@ export function AuthPage() {
   const [password, setPassword] = useState('');
   const { signIn } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
@@ -367,42 +367,53 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Animated background orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-blue-500/10 blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-blue-400/10 blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 rounded-full bg-blue-500/10 blur-3xl animate-pulse" style={{ animationDuration: '4s' }} />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 rounded-full bg-blue-400/10 blur-3xl animate-pulse" style={{ animationDuration: '5s', animationDelay: '1s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full bg-blue-600/5 blur-3xl animate-pulse" style={{ animationDuration: '6s', animationDelay: '2s' }} />
       </div>
 
-      <div className="relative w-full max-w-sm">
+      {/* Grid pattern overlay */}
+      <div
+        className="absolute inset-0 opacity-[0.03]"
+        style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, white 1px, transparent 0)`,
+          backgroundSize: '40px 40px',
+        }}
+      />
+
+      <div className="relative w-full max-w-sm animate-fade-in">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-blue-600 mb-4 shadow-lg">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 mb-4 shadow-lg shadow-blue-500/25">
             <GitBranch size={30} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white">SmartHRIS</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">SmartHRIS</h1>
           <p className="text-slate-400 mt-1 text-sm">Enterprise Workforce Management</p>
         </div>
 
         {/* Card */}
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-2xl shadow-slate-900/20 overflow-hidden">
           {/* Tab switcher */}
-          <div className="flex border-b border-slate-100">
+          <div className="flex p-1.5 bg-slate-50 m-3 rounded-xl gap-1">
             <button
               onClick={() => setMode('login')}
-              className={`flex-1 py-4 text-sm font-semibold transition-colors ${
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 ${
                 mode === 'login'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                  ? 'text-blue-700 bg-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               Login Admin / Staff
             </button>
             <button
               onClick={() => setMode('kiosk')}
-              className={`flex-1 py-4 text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2 ${
                 mode === 'kiosk'
-                  ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50'
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                  ? 'text-blue-700 bg-white shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
               }`}
             >
               <Camera size={14} /> Absen Wajah
@@ -411,7 +422,7 @@ export function AuthPage() {
 
           <div className="p-8">
             {mode === 'login' && (
-              <>
+              <div className="animate-fade-in">
                 <h2 className="text-xl font-bold text-slate-900 mb-1">Selamat Datang</h2>
                 <p className="text-sm text-slate-500 mb-6">Masuk dengan akun yang diberikan oleh Admin.</p>
 
@@ -433,7 +444,7 @@ export function AuthPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     leftIcon={<Lock size={16} />}
                     rightIcon={
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-slate-600">
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-slate-400 hover:text-slate-600 transition-colors" tabIndex={-1}>
                         {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                       </button>
                     }
@@ -441,29 +452,49 @@ export function AuthPage() {
                   />
 
                   {error && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+                    <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700 animate-scale-in flex items-center gap-2">
+                      <XCircle size={14} className="flex-shrink-0" />
                       {error}
                     </div>
                   )}
 
                   <Button type="submit" loading={loading} className="w-full" size="lg">
-                    Masuk
+                    {loading ? 'Memproses...' : 'Masuk'}
                   </Button>
                 </form>
 
                 <p className="text-center text-xs text-slate-400 mt-6">
                   Hubungi Admin untuk mendapatkan akses akun.
                 </p>
-              </>
+              </div>
             )}
 
             {mode === 'kiosk' && (
-              <KioskPanel onBack={() => setMode('login')} />
+              <div className="animate-fade-in">
+                <KioskPanel onBack={() => setMode('login')} />
+              </div>
             )}
           </div>
         </div>
 
-        <p className="text-center text-slate-500 text-xs mt-6">
+        {/* Employee app entry — no login required */}
+        {onEmployeeMode && (
+          <button
+            onClick={onEmployeeMode}
+            className="mt-5 w-full bg-white/5 hover:bg-white/10 border border-white/10 rounded-2xl px-4 py-3.5 flex items-center gap-3 transition-all active:scale-[0.98] text-left"
+          >
+            <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center flex-shrink-0">
+              <Smartphone size={18} className="text-white" />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-semibold text-white">Aplikasi Karyawan</span>
+              <span className="block text-xs text-slate-300 mt-0.5">Clock-in tanpa login · Izin · Slip Gaji</span>
+            </span>
+            <ChevronRight size={16} className="text-slate-400 flex-shrink-0" />
+          </button>
+        )}
+
+        <p className="text-center text-slate-500/60 text-xs mt-6">
           &copy; 2026 SmartHRIS. All rights reserved.
         </p>
       </div>
