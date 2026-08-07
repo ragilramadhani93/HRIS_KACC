@@ -136,6 +136,12 @@ function RegionsTab() {
     setSaving(false);
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this region? All areas and outlets under it will also be removed.')) return;
+    const { error } = await supabase.from('regions').delete().eq('id', id);
+    if (error) { toast('error', 'Cannot delete', error.message); } else { toast('success', 'Region deleted'); load(); }
+  };
+
   const filtered = regions.filter((r) => r.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -149,7 +155,12 @@ function RegionsTab() {
         { key: 'name', header: 'Name', render: (r) => <span className="font-medium">{r.name}</span> },
         { key: 'company', header: 'Company', render: (r) => (r.company as { name?: string })?.name ?? '-' },
         { key: 'is_active', header: 'Status', render: (r) => <Badge className={r.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{r.is_active ? 'Active' : 'Inactive'}</Badge> },
-        { key: 'actions', header: '', render: (r) => <Button size="sm" variant="ghost" onClick={() => openEdit(r)}><Edit2 size={14} /></Button> },
+        { key: 'actions', header: '', render: (r) => (
+          <div className="flex gap-1 justify-end">
+            <Button size="sm" variant="ghost" onClick={() => openEdit(r)}><Edit2 size={14} /></Button>
+            <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(r.id)}><Trash2 size={14} /></Button>
+          </div>
+        ) },
       ]} />
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Region' : 'Add Region'} size="sm"
         footer={<><Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button><Button loading={saving} onClick={handleSave}>Save</Button></>}
@@ -201,6 +212,12 @@ function AreasTab() {
     setSaving(false);
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this area? All outlets under it will also be removed.')) return;
+    const { error } = await supabase.from('areas').delete().eq('id', id);
+    if (error) { toast('error', 'Cannot delete', error.message); } else { toast('success', 'Area deleted'); load(); }
+  };
+
   const filtered = areas.filter((a) => a.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
@@ -215,7 +232,12 @@ function AreasTab() {
         { key: 'region', header: 'Region', render: (a) => (a.region as { name?: string })?.name ?? '-' },
         { key: 'company', header: 'Company', render: (a) => (a.region as { company?: { name?: string } })?.company?.name ?? '-' },
         { key: 'is_active', header: 'Status', render: (a) => <Badge className={a.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{a.is_active ? 'Active' : 'Inactive'}</Badge> },
-        { key: 'actions', header: '', render: (a) => <Button size="sm" variant="ghost" onClick={() => openEdit(a)}><Edit2 size={14} /></Button> },
+        { key: 'actions', header: '', render: (a) => (
+          <div className="flex gap-1 justify-end">
+            <Button size="sm" variant="ghost" onClick={() => openEdit(a)}><Edit2 size={14} /></Button>
+            <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(a.id)}><Trash2 size={14} /></Button>
+          </div>
+        ) },
       ]} />
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Area' : 'Add Area'} size="sm"
         footer={<><Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button><Button loading={saving} onClick={handleSave}>Save</Button></>}
@@ -285,6 +307,12 @@ function OutletsTab() {
     setSaving(false);
   };
 
+  const handleDelete = async (id: string) => {
+    if (!confirm('Delete this outlet? Related schedules, kiosk sessions, and employee references will be cleaned up.')) return;
+    const { error } = await supabase.from('outlets').delete().eq('id', id);
+    if (error) { toast('error', 'Cannot delete', error.message); } else { toast('success', 'Outlet deleted'); load(); }
+  };
+
   const outletTypeOptions = Object.entries(OUTLET_TYPE_LABELS).map(([v, l]) => ({ value: v, label: l }));
   const filtered = outlets.filter((o) => o.name.toLowerCase().includes(search.toLowerCase()) || o.outlet_code.toLowerCase().includes(search.toLowerCase()));
 
@@ -300,7 +328,12 @@ function OutletsTab() {
         { key: 'outlet_type', header: 'Type', render: (o) => <Badge className="bg-blue-50 text-blue-700 border border-blue-100">{OUTLET_TYPE_LABELS[o.outlet_type]}</Badge> },
         { key: 'geofence', header: 'Geofence', render: (o) => o.latitude ? <span className="flex items-center gap-1 text-xs text-slate-500"><MapPin size={12} />{o.geofence_radius_meters}m</span> : <span className="text-xs text-slate-400">Not set</span> },
         { key: 'is_active', header: 'Status', render: (o) => <Badge className={o.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{o.is_active ? 'Active' : 'Inactive'}</Badge> },
-        { key: 'actions', header: '', render: (o) => <Button size="sm" variant="ghost" onClick={() => openEdit(o)}><Edit2 size={14} /></Button> },
+        { key: 'actions', header: '', render: (o) => (
+          <div className="flex gap-1 justify-end">
+            <Button size="sm" variant="ghost" onClick={() => openEdit(o)}><Edit2 size={14} /></Button>
+            <Button size="sm" variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => handleDelete(o.id)}><Trash2 size={14} /></Button>
+          </div>
+        ) },
       ]} />
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Outlet' : 'Add Outlet'} size="lg"
         footer={<><Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button><Button loading={saving} onClick={handleSave}>Save</Button></>}
