@@ -130,7 +130,7 @@ function RegionsTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Region | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', company_id: '' });
+  const [form, setForm] = useState({ name: '', code: '', company_id: '', is_active: true });
 
   const load = async () => {
     setLoading(true);
@@ -145,8 +145,14 @@ function RegionsTab() {
 
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => { setEditing(null); setForm({ name: '', code: '', company_id: companies[0]?.id ?? '' }); setModalOpen(true); };
-  const openEdit = (r: Region) => { setEditing(r); setForm({ name: r.name, code: r.code, company_id: r.company_id }); setModalOpen(true); };
+  const openCreate = () => { setEditing(null); setForm({ name: '', code: '', company_id: companies[0]?.id ?? '', is_active: true }); setModalOpen(true); };
+  const openEdit = (r: Region) => { setEditing(r); setForm({ name: r.name, code: r.code, company_id: r.company_id, is_active: r.is_active }); setModalOpen(true); };
+
+  const toggleRegionStatus = async (r: Region) => {
+    const next = !r.is_active;
+    const { error } = await supabase.from('regions').update({ is_active: next }).eq('id', r.id);
+    if (error) { toast('error', 'Failed to update status', error.message); } else { toast('success', next ? 'Region activated' : 'Region deactivated'); load(); }
+  };
 
   const handleSave = async () => {
     if (!form.name || !form.code || !form.company_id) return toast('error', 'All fields required');
@@ -177,7 +183,11 @@ function RegionsTab() {
         { key: 'code', header: 'Code', render: (r) => <span className="font-mono text-xs bg-slate-100 px-2 py-0.5 rounded">{r.code}</span> },
         { key: 'name', header: 'Name', render: (r) => <span className="font-medium">{r.name}</span> },
         { key: 'company', header: 'Company', render: (r) => (r.company as { name?: string })?.name ?? '-' },
-        { key: 'is_active', header: 'Status', render: (r) => <Badge className={r.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{r.is_active ? 'Active' : 'Inactive'}</Badge> },
+        { key: 'is_active', header: 'Status', render: (r) => (
+          <button type="button" onClick={() => toggleRegionStatus(r)} title="Click to toggle status" className="cursor-pointer transition-transform active:scale-95">
+            <Badge className={r.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}>{r.is_active ? 'Active' : 'Inactive'}</Badge>
+          </button>
+        ) },
         { key: 'actions', header: '', render: (r) => (
           <div className="flex gap-1 justify-end">
             <Button size="sm" variant="ghost" onClick={() => openEdit(r)}><Edit2 size={14} /></Button>
@@ -192,6 +202,19 @@ function RegionsTab() {
           <Select label="Company" value={form.company_id} onChange={(e) => setForm({ ...form, company_id: e.target.value })} options={companies.map((c) => ({ value: c.id, label: c.name }))} required />
           <Input label="Region Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <Input label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required />
+          <div>
+            <p className="block text-xs font-medium text-slate-500 mb-1.5">Status</p>
+            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 p-1 bg-slate-50">
+              <button type="button" onClick={() => setForm({ ...form, is_active: true })}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${form.is_active ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
+                Active
+              </button>
+              <button type="button" onClick={() => setForm({ ...form, is_active: false })}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${!form.is_active ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
+                Inactive
+              </button>
+            </div>
+          </div>
         </div>
       </Modal>
     </>
@@ -208,7 +231,7 @@ function AreasTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Area | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', region_id: '' });
+  const [form, setForm] = useState({ name: '', code: '', region_id: '', is_active: true });
 
   const load = async () => {
     setLoading(true);
@@ -223,8 +246,14 @@ function AreasTab() {
 
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => { setEditing(null); setForm({ name: '', code: '', region_id: regions[0]?.id ?? '' }); setModalOpen(true); };
-  const openEdit = (a: Area) => { setEditing(a); setForm({ name: a.name, code: a.code, region_id: a.region_id }); setModalOpen(true); };
+  const openCreate = () => { setEditing(null); setForm({ name: '', code: '', region_id: regions[0]?.id ?? '', is_active: true }); setModalOpen(true); };
+  const openEdit = (a: Area) => { setEditing(a); setForm({ name: a.name, code: a.code, region_id: a.region_id, is_active: a.is_active }); setModalOpen(true); };
+
+  const toggleAreaStatus = async (a: Area) => {
+    const next = !a.is_active;
+    const { error } = await supabase.from('areas').update({ is_active: next }).eq('id', a.id);
+    if (error) { toast('error', 'Failed to update status', error.message); } else { toast('success', next ? 'Area activated' : 'Area deactivated'); load(); }
+  };
 
   const handleSave = async () => {
     if (!form.name || !form.code || !form.region_id) return toast('error', 'All fields required');
@@ -254,7 +283,11 @@ function AreasTab() {
         { key: 'name', header: 'Name', render: (a) => <span className="font-medium">{a.name}</span> },
         { key: 'region', header: 'Region', render: (a) => (a.region as { name?: string })?.name ?? '-' },
         { key: 'company', header: 'Company', render: (a) => (a.region as { company?: { name?: string } })?.company?.name ?? '-' },
-        { key: 'is_active', header: 'Status', render: (a) => <Badge className={a.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{a.is_active ? 'Active' : 'Inactive'}</Badge> },
+        { key: 'is_active', header: 'Status', render: (a) => (
+          <button type="button" onClick={() => toggleAreaStatus(a)} title="Click to toggle status" className="cursor-pointer transition-transform active:scale-95">
+            <Badge className={a.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}>{a.is_active ? 'Active' : 'Inactive'}</Badge>
+          </button>
+        ) },
         { key: 'actions', header: '', render: (a) => (
           <div className="flex gap-1 justify-end">
             <Button size="sm" variant="ghost" onClick={() => openEdit(a)}><Edit2 size={14} /></Button>
@@ -269,6 +302,19 @@ function AreasTab() {
           <Select label="Region" value={form.region_id} onChange={(e) => setForm({ ...form, region_id: e.target.value })} options={regions.map((r) => ({ value: r.id, label: r.name }))} required />
           <Input label="Area Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
           <Input label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required />
+          <div>
+            <p className="block text-xs font-medium text-slate-500 mb-1.5">Status</p>
+            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 p-1 bg-slate-50">
+              <button type="button" onClick={() => setForm({ ...form, is_active: true })}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${form.is_active ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
+                Active
+              </button>
+              <button type="button" onClick={() => setForm({ ...form, is_active: false })}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${!form.is_active ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
+                Inactive
+              </button>
+            </div>
+          </div>
         </div>
       </Modal>
     </>
@@ -287,7 +333,7 @@ function OutletsTab() {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     outlet_code: '', name: '', area_id: '', outlet_type: 'coffee_shop' as OutletType,
-    address: '', latitude: '', longitude: '', geofence_radius_meters: '100',
+    address: '', latitude: '', longitude: '', geofence_radius_meters: '100', is_active: true,
   });
 
   const load = async () => {
@@ -305,13 +351,19 @@ function OutletsTab() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ outlet_code: '', name: '', area_id: areas[0]?.id ?? '', outlet_type: 'coffee_shop', address: '', latitude: '', longitude: '', geofence_radius_meters: '100' });
+    setForm({ outlet_code: '', name: '', area_id: areas[0]?.id ?? '', outlet_type: 'coffee_shop', address: '', latitude: '', longitude: '', geofence_radius_meters: '100', is_active: true });
     setModalOpen(true);
   };
   const openEdit = (o: Outlet) => {
     setEditing(o);
-    setForm({ outlet_code: o.outlet_code, name: o.name, area_id: o.area_id, outlet_type: o.outlet_type, address: o.address ?? '', latitude: o.latitude?.toString() ?? '', longitude: o.longitude?.toString() ?? '', geofence_radius_meters: o.geofence_radius_meters.toString() });
+    setForm({ outlet_code: o.outlet_code, name: o.name, area_id: o.area_id, outlet_type: o.outlet_type, address: o.address ?? '', latitude: o.latitude?.toString() ?? '', longitude: o.longitude?.toString() ?? '', geofence_radius_meters: o.geofence_radius_meters.toString(), is_active: o.is_active });
     setModalOpen(true);
+  };
+
+  const toggleOutletStatus = async (o: Outlet) => {
+    const next = !o.is_active;
+    const { error } = await supabase.from('outlets').update({ is_active: next }).eq('id', o.id);
+    if (error) { toast('error', 'Failed to update status', error.message); } else { toast('success', next ? 'Outlet activated' : 'Outlet deactivated'); load(); }
   };
 
   const handleSave = async () => {
@@ -323,6 +375,7 @@ function OutletsTab() {
       latitude: form.latitude ? parseFloat(form.latitude) : null,
       longitude: form.longitude ? parseFloat(form.longitude) : null,
       geofence_radius_meters: parseInt(form.geofence_radius_meters) || 100,
+      is_active: form.is_active,
     };
     const op = editing ? supabase.from('outlets').update(payload).eq('id', editing.id) : supabase.from('outlets').insert(payload);
     const { error } = await op;
@@ -350,7 +403,11 @@ function OutletsTab() {
         { key: 'name', header: 'Name', render: (o) => <div><p className="font-medium">{o.name}</p><p className="text-xs text-slate-400">{(o.area as { name?: string })?.name}</p></div> },
         { key: 'outlet_type', header: 'Type', render: (o) => <Badge className="bg-blue-50 text-blue-700 border border-blue-100">{OUTLET_TYPE_LABELS[o.outlet_type]}</Badge> },
         { key: 'geofence', header: 'Geofence', render: (o) => o.latitude ? <span className="flex items-center gap-1 text-xs text-slate-500"><MapPin size={12} />{o.geofence_radius_meters}m</span> : <span className="text-xs text-slate-400">Not set</span> },
-        { key: 'is_active', header: 'Status', render: (o) => <Badge className={o.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{o.is_active ? 'Active' : 'Inactive'}</Badge> },
+        { key: 'is_active', header: 'Status', render: (o) => (
+          <button type="button" onClick={() => toggleOutletStatus(o)} title="Click to toggle status" className="cursor-pointer transition-transform active:scale-95">
+            <Badge className={o.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}>{o.is_active ? 'Active' : 'Inactive'}</Badge>
+          </button>
+        ) },
         { key: 'actions', header: '', render: (o) => (
           <div className="flex gap-1 justify-end">
             <Button size="sm" variant="ghost" onClick={() => openEdit(o)}><Edit2 size={14} /></Button>
@@ -375,6 +432,19 @@ function OutletsTab() {
             <Input label="Latitude" type="number" step="0.0000001" placeholder="-6.2088" value={form.latitude} onChange={(e) => setForm({ ...form, latitude: e.target.value })} />
             <Input label="Longitude" type="number" step="0.0000001" placeholder="106.8456" value={form.longitude} onChange={(e) => setForm({ ...form, longitude: e.target.value })} />
             <Input label="Geofence Radius (m)" type="number" value={form.geofence_radius_meters} onChange={(e) => setForm({ ...form, geofence_radius_meters: e.target.value })} />
+          </div>
+          <div>
+            <p className="block text-xs font-medium text-slate-500 mb-1.5">Status</p>
+            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 p-1 bg-slate-50">
+              <button type="button" onClick={() => setForm({ ...form, is_active: true })}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${form.is_active ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
+                Active
+              </button>
+              <button type="button" onClick={() => setForm({ ...form, is_active: false })}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${!form.is_active ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
+                Inactive
+              </button>
+            </div>
           </div>
         </div>
       </Modal>
