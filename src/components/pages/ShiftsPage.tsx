@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Plus, Edit2, Calendar, Users, Store, Trash2, Check, X, Info } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, Edit2, Calendar, Users, Store, Trash2, Check, X, Info, Download, Upload } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input, Select } from '../ui/Input';
 import { Table } from '../ui/Table';
@@ -460,24 +460,35 @@ function ShiftAssignmentsTab() {
   const [assignments, setAssignments] = useState<ShiftAssignment[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shifts, setShifts] = useState<ShiftTemplate[]>([]);
+  const [outlets, setOutlets] = useState<{ id: string; name: string }[]>([]);
+  const [filterOutlet, setFilterOutlet] = useState('');
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ employee_id: '', shift_template_id: '', effective_date: '', end_date: '' });
+  // Bulk import
+  const [importOpen, setImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [parseResult, setParseResult] = useState<{ ok: any[]; skipped: string[] } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const load = async () => {
     setLoading(true);
-    const [{ data: a }, { data: e }, { data: s }] = await Promise.all([
+    const [{ data: a }, { data: e }, { data: s }, { data: o }] = await Promise.all([
       supabase.from('shift_assignments').select('*, employee:employees(full_name, employee_code), shift_template:shift_templates(name, start_time, end_time)').order('effective_date', { ascending: false }).limit(50),
-      supabase.from('employees').select('id, full_name, employee_code').eq('status', 'active').order('full_name'),
+      supabase.from('employees').select('id, full_name, employee_code, primary_outlet_id').eq('status', 'active').order('full_name'),
       supabase.from('shift_templates').select('id, name').eq('is_active', true).order('name'),
+      supabase.from('outlets').select('id, name').eq('is_active', true).order('name'),
     ]);
     setAssignments((a as ShiftAssignment[]) ?? []);
     setEmployees((e as Employee[]) ?? []);
     setShifts(s ?? []);
+    setOutlets(o ?? []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
+
+  const filteredEmployees = filterOutlet ? employees.filter((em) => (em as any).primary_outlet_id === filterOutlet) : employees;
 
   const handleSave = async () => {
     if (!form.employee_id || !form.shift_template_id || !form.effective_date) return toast('error', 'Semua field wajib diisi');
@@ -487,12 +498,107 @@ function ShiftAssignmentsTab() {
     setSaving(false);
   };
 
+  // ─── Bulk import ─────────────────────────────────────────────
+  const downloadTemplate = (ext: 'xlsx' | 'csv') => {
+    const rows = [
+      { employee_code: 'KAR-0001', shift_name: 'Shift Pagi', effective_date: '2026-08-10', end_date: '' },
+    ];
+    if (ext === 'csv') {
+      const header = ['employee_code', 'shift_name', 'effective_date', 'end_date'];
+      const csv = '\uFEFF' + [header.join(','), rows.map((r) => [r.employee_code, r.shift_name, r.effective_date, r.end_date].join(',')).join('\n')].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'Template_Bulk_Jadwal.csv';
+      a.click(); URL.revokeObjectURL(url);
+      return;
+    }
+    import('xlsx').then((XLSX) => {
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, 'Jadwal');
+      XLSX.writeFile(wb, 'Template_Bulk_Jadwal.xlsx');
+    });
+  };
+
+  const toDateStr = (v: any): string => {
+    if (!v) return '';
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      return `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+    }
+    const s = String(v).trim();
+    const m1 = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m1) return `${m1[1]}-${String(m1[2]).padStart(2, '0')}-${String(m1[3]).padStart(2, '0')}`;
+    const m2 = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+    if (m2) return `${m2[3]}-${String(m2[2]).padStart(2, '0')}-${String(m2[1]).padStart(2, '0')}`;
+    return s;
+  };
+
+  const parseFile = async (file: File) => {
+    setImporting(true);
+    try {
+      const XLSX = await import('xlsx');
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json<any>(ws, { defval: '' });
+      const empByCode = new Map(employees.map((em) => [em.employee_code, em.id]));
+      const shiftByName = new Map(shifts.map((s) => [s.name.trim().toLowerCase(), s.id]));
+      const ok: any[] = [];
+      const skipped: string[] = [];
+      raw.forEach((r: any, i: number) => {
+        const empCode = String(r.employee_code ?? r['Kode Karyawan'] ?? '').trim();
+        const shiftName = String(r.shift_name ?? r['Nama Shift'] ?? '').trim();
+        const eff = toDateStr(r.effective_date ?? r['Berlaku Mulai']);
+        const end = toDateStr(r.end_date ?? r['Berakhir']);
+        const empId = empByCode.get(empCode);
+        const shiftId = shiftByName.get(shiftName.toLowerCase());
+        const line = `Baris ${i + 2}`;
+        if (!empId) { skipped.push(`${line}: kode karyawan "${empCode || '-'}" tidak ditemukan`); return; }
+        if (!shiftId) { skipped.push(`${line}: shift "${shiftName || '-'}" tidak ditemukan`); return; }
+        if (!eff) { skipped.push(`${line}: tanggal berlaku wajib diisi`); return; }
+        ok.push({ employee_id: empId, shift_template_id: shiftId, effective_date: eff, end_date: end || null });
+      });
+      setParseResult({ ok, skipped });
+    } catch (err: any) {
+      setParseResult({ ok: [], skipped: [`Gagal membaca file: ${err?.message ?? 'format tidak dikenali'}`] });
+    }
+    setImporting(false);
+  };
+
+  const runImport = async () => {
+    if (!parseResult || parseResult.ok.length === 0) return;
+    setImporting(true);
+    const { error } = await supabase.from('shift_assignments').insert(parseResult.ok);
+    setImporting(false);
+    if (error) { toast('error', 'Import gagal', error.message); return; }
+    toast('success', `${parseResult.ok.length} penugasan shift berhasil dibuat`);
+    setImportOpen(false);
+    setParseResult(null);
+    if (fileRef.current) fileRef.current.value = '';
+    load();
+  };
+
   return (
     <>
-      <div className="flex justify-end mb-4">
-        <Button onClick={() => { setForm({ employee_id: '', shift_template_id: '', effective_date: new Date().toISOString().split('T')[0], end_date: '' }); setModalOpen(true); }}>
-          <Plus size={16} /> Tugaskan Shift
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Select
+            value={filterOutlet}
+            onChange={(e) => setFilterOutlet(e.target.value)}
+            options={[{ value: '', label: 'Semua Outlet' }, ...outlets.map((o) => ({ value: o.id, label: o.name }))]}
+            className="w-52"
+          />
+          <span className="text-xs text-slate-400">{filteredEmployees.length} karyawan</span>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" onClick={() => downloadTemplate('xlsx')}><Download size={14} /> Template Excel</Button>
+          <Button variant="outline" onClick={() => downloadTemplate('csv')}><Download size={14} /> Template CSV</Button>
+          <Button variant="outline" onClick={() => setImportOpen(true)}><Upload size={14} /> Upload Bulk Jadwal</Button>
+          <Button onClick={() => { setForm({ employee_id: '', shift_template_id: '', effective_date: new Date().toISOString().split('T')[0], end_date: '' }); setModalOpen(true); }}>
+            <Plus size={16} /> Tugaskan Shift
+          </Button>
+        </div>
       </div>
       <Table loading={loading} rowKey={(a) => a.id} data={assignments} columns={[
         { key: 'employee', header: 'Karyawan', render: (a) => <div><p className="font-medium">{(a.employee as { full_name?: string })?.full_name}</p><p className="text-xs text-slate-400 font-mono">{(a.employee as { employee_code?: string })?.employee_code}</p></div> },
@@ -504,10 +610,48 @@ function ShiftAssignmentsTab() {
         footer={<><Button variant="outline" onClick={() => setModalOpen(false)}>Batal</Button><Button loading={saving} onClick={handleSave}>Tugaskan</Button></>}
       >
         <div className="space-y-4">
-          <Select label="Karyawan" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} options={[{ value: '', label: 'Pilih Karyawan' }, ...employees.map((e) => ({ value: e.id, label: `${e.full_name} (${e.employee_code})` }))]} required />
+          <Select label="Karyawan" value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })}
+            options={[{ value: '', label: 'Pilih Karyawan' }, ...filteredEmployees.map((e) => ({ value: e.id, label: `${e.full_name} (${e.employee_code})` }))]}
+            required
+            hint={filterOutlet ? `Menampilkan ${filteredEmployees.length} karyawan outlet terpilih` : `${filteredEmployees.length} karyawan aktif`}
+          />
           <Select label="Shift" value={form.shift_template_id} onChange={(e) => setForm({ ...form, shift_template_id: e.target.value })} options={[{ value: '', label: 'Pilih Shift' }, ...shifts.map((s) => ({ value: s.id, label: s.name }))]} required />
           <Input label="Berlaku Mulai" type="date" value={form.effective_date} onChange={(e) => setForm({ ...form, effective_date: e.target.value })} required />
           <Input label="Berakhir (opsional)" type="date" value={form.end_date} onChange={(e) => setForm({ ...form, end_date: e.target.value })} hint="Kosongkan untuk jadwal berkelanjutan" />
+        </div>
+      </Modal>
+
+      {/* Bulk import modal */}
+      <Modal isOpen={importOpen} onClose={() => setImportOpen(false)} title="Upload Bulk Jadwal" size="md"
+        footer={<>
+          <Button variant="outline" onClick={() => setImportOpen(false)}>Tutup</Button>
+          {parseResult && parseResult.ok.length > 0 && (
+            <Button loading={importing} onClick={runImport}>Import {parseResult.ok.length} baris</Button>
+          )}
+        </>}
+      >
+        <div className="space-y-4">
+          <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700">
+            <p className="font-semibold mb-1">Format file (.xlsx / .csv)</p>
+            <p className="text-xs">Kolom: <code className="font-mono">employee_code</code>, <code className="font-mono">shift_name</code>, <code className="font-mono">effective_date</code>, <code className="font-mono">end_date</code> (opsional).</p>
+            <p className="text-xs mt-1">Tanggal: <code className="font-mono">YYYY-MM-DD</code> atau <code className="font-mono">DD/MM/YYYY</code>. Unduh template untuk contoh.</p>
+          </div>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" id="bulk-shift-file"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) parseFile(f); }} />
+          <Button variant="outline" loading={importing} className="w-full" onClick={() => fileRef.current?.click()}>
+            <Upload size={14} /> Pilih File Jadwal
+          </Button>
+          {parseResult && (
+            <div className="space-y-2 text-xs">
+              <p className="font-semibold text-emerald-600">{parseResult.ok.length} baris siap diimport</p>
+              {parseResult.skipped.length > 0 && (
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-amber-700 max-h-40 overflow-y-auto">
+                  <p className="font-semibold mb-1">Dilewati ({parseResult.skipped.length}):</p>
+                  {parseResult.skipped.map((msg, i) => <p key={i}>• {msg}</p>)}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </Modal>
     </>

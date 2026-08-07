@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ArrowLeft, Building2, CalendarDays, CalendarRange, Camera, CheckCircle, ChevronRight,
-  FileText, Fingerprint, Lock, MapPin, Printer, RefreshCw, ScanFace,
-  Search, ShieldCheck, Upload, User, Wallet, XCircle,
+  ArrowLeft, Building2, CalendarDays, CalendarRange, Camera, CheckCircle,
+  FileText, Fingerprint, Lock, Printer, RefreshCw, ScanFace,
+  ShieldCheck, Upload, User, Wallet, XCircle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { findBestMatch } from '../../lib/faceMatch';
@@ -13,7 +13,7 @@ import {
   STATUS_COLORS, ABSENCE_TYPE_LABELS, MONTH_NAMES, createNotification,
 } from '../../lib/utils';
 import { Badge } from '../ui/Badge';
-import { AbsenTab, CameraOverlay, FaceRegisterOverlay, JadwalTab } from './EmployeeAppSections';
+import { AbsenTab, CameraOverlay, JadwalTab } from './EmployeeAppSections';
 
 // No stored identity — the session is bound to the verified face profile.
 
@@ -45,10 +45,9 @@ interface LoginCandidate {
   emp: EmpView;
 }
 
-function FaceLogin({ candidates, onLogin, onRegister, onExit }: {
+function FaceLogin({ candidates, onLogin, onExit }: {
   candidates: LoginCandidate[];
   onLogin: (e: EmpView) => void;
-  onRegister: () => void;
   onExit?: () => void;
 }) {
   const [state, setState] = useState<LoginState>('idle');
@@ -96,7 +95,7 @@ function FaceLogin({ candidates, onLogin, onRegister, onExit }: {
       setState('matching');
       try {
         if (candidates.length === 0) {
-          setMsg('Belum ada wajah terdaftar. Daftarkan wajah Anda untuk pertama kali, atau hubungi HR.');
+          setMsg('Belum ada wajah terdaftar. Silakan hubungi HR untuk pendaftaran wajah.');
           setState('error');
           return;
         }
@@ -157,12 +156,6 @@ function FaceLogin({ candidates, onLogin, onRegister, onExit }: {
             >
               <Camera size={20} /> Scan Wajah Sekarang
             </button>
-            <button
-              onClick={onRegister}
-              className="text-slate-500 hover:text-slate-700 text-xs flex items-center gap-1.5"
-            >
-              <Fingerprint size={13} /> Wajah belum terdaftar? Daftarkan di sini (sekali saja)
-            </button>
           </div>
         )}
 
@@ -215,9 +208,6 @@ function FaceLogin({ candidates, onLogin, onRegister, onExit }: {
             <button onClick={() => setState('idle')} className="w-full py-3.5 rounded-2xl bg-blue-600 text-white text-sm font-bold active:scale-[0.98] transition-all flex items-center justify-center gap-2">
               <RefreshCw size={15} /> Coba Lagi
             </button>
-            <button onClick={onRegister} className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1.5">
-              <Fingerprint size={12} /> Daftarkan wajah saya
-            </button>
           </div>
         )}
       </div>
@@ -225,75 +215,7 @@ function FaceLogin({ candidates, onLogin, onRegister, onExit }: {
   );
 }
 
-// ─── Registration picker (one-time face registration) ────────────────────────
-function RegisterPicker({ employees, onPick, onCancel }: {
-  employees: EmpView[];
-  onPick: (e: EmpView) => void;
-  onCancel: () => void;
-}) {
-  const [q, setQ] = useState('');
-  const filtered = employees.filter((e) =>
-    e.full_name.toLowerCase().includes(q.toLowerCase()) ||
-    e.employee_code.toLowerCase().includes(q.toLowerCase())
-  );
 
-  return (
-    <div className="h-full flex flex-col">
-      <div className="bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 px-5 pt-12 pb-8 relative overflow-hidden">
-        <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
-        <button onClick={onCancel} className="relative flex items-center gap-1.5 text-blue-100 text-xs mb-4">
-          <ArrowLeft size={14} /> Kembali
-        </button>
-        <div className="relative flex items-center gap-3">
-          <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center">
-            <ScanFace size={22} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-white text-lg font-bold leading-tight">Daftarkan Wajah</h1>
-            <p className="text-blue-100 text-xs mt-0.5">Pilih profil Anda — pendaftaran cukup dilakukan sekali</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="relative mb-4">
-          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Cari nama atau kode karyawan..."
-            className="w-full bg-white border border-slate-200 rounded-2xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 transition-shadow"
-          />
-        </div>
-
-        <div className="space-y-2.5">
-          {filtered.map((e) => (
-            <button
-              key={e.id}
-              onClick={() => onPick(e)}
-              className="w-full bg-white rounded-2xl border border-slate-100 shadow-sm p-3.5 flex items-center gap-3 text-left hover:border-blue-300 hover:shadow-md active:scale-[0.99] transition-all"
-            >
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
-                {getInitials(e.full_name)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-slate-900 text-sm truncate">{e.full_name}</p>
-                <p className="text-xs text-slate-400 font-mono">{e.employee_code} · {e.job_title ?? 'Karyawan'}</p>
-                <p className="text-[11px] text-slate-400 flex items-center gap-1 mt-0.5">
-                  <MapPin size={10} /> {e.primary_outlet?.name ?? 'Outlet belum diatur'}
-                </p>
-              </div>
-              <ChevronRight size={16} className="text-slate-300 flex-shrink-0" />
-            </button>
-          ))}
-          {filtered.length === 0 && (
-            <p className="text-center text-slate-400 text-sm py-10">Karyawan tidak ditemukan</p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Izin tab ─────────────────────────────────────────────────────────────────
 const IZIN_TYPES = [
@@ -742,9 +664,8 @@ function SlipDetail({ item, emp, periodLabel }: { item: any; emp: EmpView; perio
 }
 
 // ─── Profil tab ───────────────────────────────────────────────────────────────
-function ProfilTab({ emp, onRegisterFace, onLock, onExit }: {
+function ProfilTab({ emp, onLock, onExit }: {
   emp: EmpView;
-  onRegisterFace: () => void;
   onLock: () => void;
   onExit?: () => void;
 }) {
@@ -768,7 +689,7 @@ function ProfilTab({ emp, onRegisterFace, onLock, onExit }: {
         <p className="text-xs text-slate-400 mt-0.5">{emp.job_title} · {emp.primary_outlet?.name}</p>
       </div>
 
-      {emp.face_registered ? (
+      {emp.face_registered && (
         <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm p-5 flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
             <ShieldCheck size={20} />
@@ -779,13 +700,6 @@ function ProfilTab({ emp, onRegisterFace, onLock, onExit }: {
           </div>
           <Badge className="bg-emerald-100 text-emerald-700 flex-shrink-0">AKTIF</Badge>
         </div>
-      ) : (
-        <button
-          onClick={onRegisterFace}
-          className="w-full rounded-2xl border-2 border-dashed border-blue-300 bg-blue-50/60 py-3.5 text-sm font-semibold text-blue-600 hover:bg-blue-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-        >
-          <ScanFace size={16} /> Daftarkan Wajah Sekarang
-        </button>
       )}
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
@@ -813,12 +727,6 @@ function ProfilTab({ emp, onRegisterFace, onLock, onExit }: {
       </div>
 
       <button
-        onClick={onRegisterFace}
-        className="w-full py-3.5 rounded-2xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:border-blue-300 hover:text-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-      >
-        <RefreshCw size={15} /> Daftar Ulang Wajah
-      </button>
-      <button
         onClick={onLock}
         className="w-full py-3.5 rounded-2xl bg-slate-900 text-white text-sm font-bold active:scale-[0.98] transition-all flex items-center justify-center gap-2"
       >
@@ -839,35 +747,25 @@ function ProfilTab({ emp, onRegisterFace, onLock, onExit }: {
 // ─── Main Employee App ────────────────────────────────────────────────────────
 export function EmployeeApp({ onExit }: { onExit?: () => void }) {
   const [tab, setTab] = useState<Tab>('absen');
-  const [stage, setStage] = useState<'login' | 'register' | 'app'>('login');
+  const [stage, setStage] = useState<'login' | 'app'>('login');
   const [candidates, setCandidates] = useState<LoginCandidate[]>([]);
-  const [regCandidates, setRegCandidates] = useState<EmpView[]>([]);
-  const [regEmp, setRegEmp] = useState<EmpView | null>(null);
   const [emp, setEmp] = useState<EmpView | null>(null);
   const [outlet, setOutlet] = useState<OutletView | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [regOpen, setRegOpen] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [ready, setReady] = useState(false);
 
   const loadData = useCallback(() => {
-    return Promise.all([
-      supabase.from('face_profiles')
-        .select('*, employee:employees!inner(*, primary_outlet:outlets!primary_outlet_id(*), backup_outlet:outlets!backup_outlet_id(*))')
-        .eq('status', 'verified'),
-      supabase.from('employees')
-        .select('*, primary_outlet:outlets!primary_outlet_id(*), backup_outlet:outlets!backup_outlet_id(*)')
-        .in('status', ['active', 'probation', 'contract'])
-        .order('full_name'),
-    ]).then(([{ data: fps }, { data: emps }]) => {
-      const list = (emps ?? []) as EmpView[];
-      setRegCandidates(list);
-      const cands: LoginCandidate[] = ((fps ?? []) as any[])
-        .filter((fp) => fp?.employee)
-        .map((fp) => ({ profile: fp as FaceProfile, emp: fp.employee as EmpView }));
-      setCandidates(cands);
-      setReady(true);
-    });
+    return supabase.from('face_profiles')
+      .select('*, employee:employees!inner(*, primary_outlet:outlets!primary_outlet_id(*), backup_outlet:outlets!backup_outlet_id(*))')
+      .eq('status', 'verified')
+      .then(({ data: fps }) => {
+        const cands: LoginCandidate[] = ((fps ?? []) as any[])
+          .filter((fp) => fp?.employee)
+          .map((fp) => ({ profile: fp as FaceProfile, emp: fp.employee as EmpView }));
+        setCandidates(cands);
+        setReady(true);
+      });
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
@@ -906,14 +804,7 @@ export function EmployeeApp({ onExit }: { onExit?: () => void }) {
           <FaceLogin
             candidates={candidates}
             onLogin={handleLogin}
-            onRegister={() => setStage('register')}
             onExit={onExit}
-          />
-        ) : stage === 'register' ? (
-          <RegisterPicker
-            employees={regCandidates}
-            onPick={(e) => { setRegEmp(e); setRegOpen(true); }}
-            onCancel={() => setStage('login')}
           />
         ) : (
           <>
@@ -925,7 +816,6 @@ export function EmployeeApp({ onExit }: { onExit?: () => void }) {
                   outlet={outlet}
                   onOutletChange={setOutlet}
                   onOpenCamera={() => setCameraOpen(true)}
-                  onRegisterFace={() => setRegOpen(true)}
                   onRefreshKey={refreshKey}
                 />
               )}
@@ -935,7 +825,6 @@ export function EmployeeApp({ onExit }: { onExit?: () => void }) {
               {tab === 'profil' && emp && (
                 <ProfilTab
                   emp={emp}
-                  onRegisterFace={() => setRegOpen(true)}
                   onLock={handleLock}
                   onExit={onExit}
                 />
@@ -976,25 +865,6 @@ export function EmployeeApp({ onExit }: { onExit?: () => void }) {
               />
             )}
           </>
-        )}
-
-        {/* Face registration overlay (first-time registration + re-register) */}
-        {regOpen && (regEmp || emp) && (
-          <FaceRegisterOverlay
-            emp={regEmp ?? emp!}
-            onClose={() => setRegOpen(false)}
-            onDone={() => {
-              setRegOpen(false);
-              setRegEmp(null);
-              loadData();
-              if (stage === 'app' && emp) {
-                setEmp((e) => (e ? { ...e, face_registered: true } : e));
-                setRefreshKey((k) => k + 1);
-              } else {
-                setStage('login');
-              }
-            }}
-          />
         )}
       </div>
     </div>

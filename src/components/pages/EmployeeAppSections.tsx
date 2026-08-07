@@ -558,8 +558,8 @@ export function FaceRegisterOverlay({ emp, onClose, onDone }: { emp: EmpView; on
 }
 
 // ─── Absen tab ────────────────────────────────────────────────────────────────
-export function AbsenTab({ emp, outlet, onOutletChange, onOpenCamera, onRegisterFace, onRefreshKey }: {
-  emp: EmpView; outlet: OutletView; onOutletChange: (o: OutletView) => void; onOpenCamera: () => void; onRegisterFace: () => void; onRefreshKey: number;
+export function AbsenTab({ emp, outlet, onOutletChange, onOpenCamera, onRefreshKey }: {
+  emp: EmpView; outlet: OutletView; onOutletChange: (o: OutletView) => void; onOpenCamera: () => void; onRefreshKey: number;
 }) {
   const [clock, setClock] = useState(new Date());
   const [todayAtt, setTodayAtt] = useState<AttRow | null>(null);
@@ -628,7 +628,7 @@ export function AbsenTab({ emp, outlet, onOutletChange, onOpenCamera, onRegister
       </div>
 
       {/* Outlet switch */}
-      {emp.backup_outlet && emp.backup_outlet.id !== outlet.id && (
+      {emp.backup_outlet && (
         <div className="flex gap-2">
           {[emp.primary_outlet, emp.backup_outlet].filter(Boolean).map((o) => o && (
             <button
@@ -705,12 +705,9 @@ export function AbsenTab({ emp, outlet, onOutletChange, onOpenCamera, onRegister
             <ShieldCheck size={11} /> Absen wajib verifikasi wajah (skor ≥ 40%)
           </p>
         ) : (
-          <button
-            onClick={onRegisterFace}
-            className="mt-3 w-full rounded-xl border border-dashed border-blue-300 bg-blue-50/60 py-2.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
-          >
-            <ScanFace size={13} /> Daftarkan Wajah untuk Absen Wajah
-          </button>
+          <p className="text-center text-[11px] text-slate-400 font-medium mt-3">
+            Absen wajah belum aktif — hubungi HR untuk pendaftaran wajah.
+          </p>
         )}
       </div>
 

@@ -354,6 +354,22 @@ export function EmployeesPage() {
     if (error) { toast('error', 'Failed', error.message); } else { toast('success', 'Status updated'); loadEmployees(); }
   };
 
+  const handleDeleteEmployee = async (emp: Employee) => {
+    if (!confirm(`Hapus permanen ${emp.full_name} (${emp.employee_code})?\nSemua data terkait (absensi, wajah, dokumen, izin, slip gaji) juga akan dihapus.`)) return;
+    // Best-effort: bersihkan data terkait sebelum menghapus karyawan
+    const childTables = [
+      'attendance', 'face_profiles', 'shift_assignments', 'employee_documents',
+      'absence_requests', 'leave_requests', 'leave_balances', 'overtime_requests',
+      'payroll_items', 'expense_claims', 'incentive_records', 'kiosk_sessions',
+    ];
+    await Promise.allSettled(childTables.map((t) => supabase.from(t).delete().eq('employee_id', emp.id)));
+    const { error } = await supabase.from('employees').delete().eq('id', emp.id);
+    if (error) { toast('error', 'Gagal hapus', error.message); return; }
+    toast('success', 'Karyawan dihapus');
+    if (detailEmployee?.id === emp.id) setDetailEmployee(null);
+    loadEmployees();
+  };
+
   const companyFilterOptions = [{ value: '', label: 'All Companies' }, ...allCompanies.map((c) => ({ value: c.id, label: c.name }))];
 
   const filtered = employees.filter((e) => {
@@ -434,6 +450,9 @@ export function EmployeesPage() {
                 <Button size="sm" variant="ghost" onClick={() => openEdit(e)}><Edit2 size={14} /></Button>
                 <Button size="sm" variant="ghost" className={e.status === 'active' ? 'text-red-500 hover:bg-red-50' : 'text-emerald-600 hover:bg-emerald-50'} onClick={() => handleToggleStatus(e)}>
                   {e.status === 'active' ? <UserX size={14} /> : <UserCheck size={14} />}
+                </Button>
+                <Button size="sm" variant="ghost" className="text-slate-300 hover:text-red-500 hover:bg-red-50" title="Hapus karyawan" onClick={() => handleDeleteEmployee(e)}>
+                  <Trash2 size={14} />
                 </Button>
               </div>
             ),
