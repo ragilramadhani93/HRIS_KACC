@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { AuthProvider, useAuth } from './lib/auth';
 import { ToastProvider } from './components/ui/Toast';
 import { AppLayout } from './components/layout/AppLayout';
@@ -41,6 +42,11 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [notifOpen, setNotifOpen] = useState(false);
   const unreadCount = useUnreadCount();
+
+  // Native APK build (Capacitor): the app IS the employee app — no admin shell.
+  if (Capacitor.isNativePlatform()) {
+    return <EmployeeApp />;
+  }
 
   if (loading) {
     return (

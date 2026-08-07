@@ -1,42 +1,236 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertTriangle, ArrowLeft, Building2, CalendarDays, Camera, CheckCircle, ChevronRight,
-  Clock, FileText, Fingerprint, LogIn, LogOut, MapPin, Printer, RefreshCw, ScanFace,
+  ArrowLeft, Building2, CalendarDays, CalendarRange, Camera, CheckCircle, ChevronRight,
+  FileText, Fingerprint, Lock, MapPin, Printer, RefreshCw, ScanFace,
   Search, ShieldCheck, Upload, User, Wallet, XCircle,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { findBestMatch } from '../../lib/faceMatch';
 import type { FaceProfile } from '../../lib/faceMatch';
 import {
-  formatTime, formatDate, formatCurrency, getInitials, haversineDistance,
+  formatDate, formatCurrency, getInitials,
   STATUS_COLORS, ABSENCE_TYPE_LABELS, MONTH_NAMES, createNotification,
 } from '../../lib/utils';
 import { Badge } from '../ui/Badge';
+import { AbsenTab, CameraOverlay, FaceRegisterOverlay, JadwalTab } from './EmployeeAppSections';
 
-const EMP_KEY = 'kacc_emp_id';
+// No stored identity — the session is bound to the verified face profile.
 
-interface OutletView {
+export interface OutletView {
   id: string; name: string; outlet_code: string; address?: string | null;
   latitude?: number | null; longitude?: number | null; geofence_radius_meters?: number | null;
 }
-interface EmpView {
+export interface EmpView {
   id: string; user_id?: string | null; employee_code: string; full_name: string; nik?: string | null;
   phone?: string | null; email?: string | null; job_title?: string | null; department?: string | null;
   status: string; face_registered?: boolean | null; salary_scheme?: string | null;
   primary_outlet_id?: string | null; backup_outlet_id?: string | null;
   primary_outlet?: OutletView | null; backup_outlet?: OutletView | null;
 }
-interface AttRow {
+export interface AttRow {
   id: string; employee_id: string; attendance_date: string; check_in_time?: string | null;
   check_out_time?: string | null; status?: string; check_in_geofence?: string | null;
   work_duration_minutes?: number | null; shift?: { name?: string; start_time?: string; end_time?: string } | null;
 }
 
-type Tab = 'absen' | 'izin' | 'slip' | 'profil';
+type Tab = 'absen' | 'jadwal' | 'izin' | 'slip' | 'profil';
 
-// ─── Identity picker (no login — choose who you are) ─────────────────────────
-function IdentityPicker({ employees, onPick, onExit }: { employees: EmpView[]; onPick: (e: EmpView) => void; onExit: () => void }) {
+// ─── Face login (auto-login via face recognition) ────────────────────────────
+type LoginState = 'idle' | 'capturing' | 'matching' | 'success' | 'error';
+
+// Login candidates: verified face profiles mapped to their employees
+interface LoginCandidate {
+  profile: FaceProfile;
+  emp: EmpView;
+}
+
+function FaceLogin({ candidates, onLogin, onRegister, onExit }: {
+  candidates: LoginCandidate[];
+  onLogin: (e: EmpView) => void;
+  onRegister: () => void;
+  onExit?: () => void;
+}) {
+  const [state, setState] = useState<LoginState>('idle');
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [msg, setMsg] = useState('');
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const stopCamera = useCallback(() => {
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+  }, []);
+
+  useEffect(() => () => stopCamera(), [stopCamera]);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
+      streamRef.current = stream;
+      setState('capturing');
+    } catch {
+      setMsg('Kamera tidak dapat diakses. Periksa izin kamera di pengaturan aplikasi / browser.');
+      setState('error');
+    }
+  };
+
+  useEffect(() => {
+    if (state === 'capturing' && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [state]);
+
+  const capture = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const ctx = canvasRef.current.getContext('2d')!;
+    canvasRef.current.width = videoRef.current.videoWidth;
+    canvasRef.current.height = videoRef.current.videoHeight;
+    ctx.drawImage(videoRef.current, 0, 0);
+    const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.85);
+    canvasRef.current.toBlob(async (b) => {
+      if (!b) return;
+      setPhoto(dataUrl);
+      stopCamera();
+      setState('matching');
+      try {
+        if (candidates.length === 0) {
+          setMsg('Belum ada wajah terdaftar. Daftarkan wajah Anda untuk pertama kali, atau hubungi HR.');
+          setState('error');
+          return;
+        }
+        const res = await findBestMatch(b, candidates.map((c) => c.profile));
+        const score = res?.confidence ?? 0;
+        const hit = candidates.find((c) => c.profile.id === res?.profile.id);
+        if (hit && score >= 40) {
+          setMsg(`Halo ${hit.emp.full_name.split(' ')[0]}! Masuk sebagai ${hit.emp.full_name}.`);
+          setState('success');
+          setTimeout(() => onLogin(hit.emp), 1400);
+        } else {
+          setMsg(`Wajah tidak dikenali (${score.toFixed(0)}%). Pastikan pencahayaan cukup dan wajah terlihat jelas.`);
+          setState('error');
+        }
+      } catch {
+        setMsg('Verifikasi wajah gagal. Silakan coba lagi.');
+        setState('error');
+      }
+    }, 'image/jpeg', 0.85);
+  };
+
+  return (
+    <div className="h-full flex flex-col bg-slate-950">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-blue-800 via-blue-700 to-indigo-600 px-5 pt-12 pb-16 relative overflow-hidden">
+        <div className="absolute -top-12 -right-12 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
+        {onExit && (
+          <button onClick={onExit} className="relative flex items-center gap-1.5 text-blue-100 text-xs mb-4">
+            <ArrowLeft size={14} /> Kembali
+          </button>
+        )}
+        <div className="relative flex items-center gap-3">
+          <div className="w-12 h-12 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center">
+            <ScanFace size={24} className="text-white" />
+          </div>
+          <div>
+            <h1 className="text-white text-lg font-bold leading-tight">SmartHRIS Karyawan</h1>
+            <p className="text-blue-100 text-xs mt-0.5">Masuk otomatis dengan pengenalan wajah</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 flex flex-col items-center justify-center px-6 -mt-8 pb-8">
+        {state === 'idle' && (
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 flex flex-col items-center gap-5 text-center">
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center animate-pulse shadow-lg shadow-blue-200">
+              <Camera size={40} className="text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-slate-900 text-lg">Masuk dengan Wajah</p>
+              <p className="text-slate-400 text-xs mt-1">
+                Selfie sekali — aplikasi mengenali Anda otomatis. Menu izin & slip gaji hanya bisa diakses oleh wajah Anda.
+              </p>
+            </div>
+            <button
+              onClick={startCamera}
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-200 active:scale-[0.97] transition-all flex items-center justify-center gap-2"
+            >
+              <Camera size={20} /> Scan Wajah Sekarang
+            </button>
+            <button
+              onClick={onRegister}
+              className="text-slate-500 hover:text-slate-700 text-xs flex items-center gap-1.5"
+            >
+              <Fingerprint size={13} /> Wajah belum terdaftar? Daftarkan di sini (sekali saja)
+            </button>
+          </div>
+        )}
+
+        {state === 'capturing' && (
+          <div className="flex flex-col items-center gap-5 w-full max-w-sm">
+            <p className="text-white font-semibold">Posisikan wajah dalam lingkaran</p>
+            <div className="relative w-full rounded-3xl overflow-hidden bg-black border border-blue-500/50 aspect-[3/4]">
+              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-44 h-52 rounded-full border-4 border-blue-400/70 border-dashed" />
+              </div>
+              <div className="absolute bottom-3 left-0 right-0 flex justify-center">
+                <span className="bg-black/50 text-white text-[11px] px-3 py-1.5 rounded-full">Pastikan pencahayaan cukup</span>
+              </div>
+            </div>
+            <canvas ref={canvasRef} className="hidden" />
+            <button
+              onClick={capture}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl active:scale-[0.98] transition-all"
+            >
+              Ambil Foto & Kenali
+            </button>
+          </div>
+        )}
+
+        {state === 'matching' && (
+          <div className="flex flex-col items-center gap-5">
+            {photo && <img src={photo} alt="" className="w-28 h-28 rounded-full object-cover border-4 border-blue-500 shadow-2xl" />}
+            <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin" />
+            <p className="text-white font-semibold">Mengenali wajah...</p>
+          </div>
+        )}
+
+        {state === 'success' && (
+          <div className="flex flex-col items-center gap-5 text-center">
+            <div className="w-24 h-24 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center animate-bounce">
+              <CheckCircle size={48} className="text-emerald-400" />
+            </div>
+            <p className="text-white font-bold text-xl">{msg}</p>
+            <p className="text-slate-500 text-xs">Membuka aplikasi...</p>
+          </div>
+        )}
+
+        {state === 'error' && (
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 flex flex-col items-center gap-4 text-center">
+            <div className="w-20 h-20 rounded-full bg-red-50 border border-red-100 flex items-center justify-center">
+              <XCircle size={40} className="text-red-400" />
+            </div>
+            <p className="text-slate-700 text-sm font-medium">{msg}</p>
+            <button onClick={() => setState('idle')} className="w-full py-3.5 rounded-2xl bg-blue-600 text-white text-sm font-bold active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+              <RefreshCw size={15} /> Coba Lagi
+            </button>
+            <button onClick={onRegister} className="text-slate-400 hover:text-slate-600 text-xs flex items-center gap-1.5">
+              <Fingerprint size={12} /> Daftarkan wajah saya
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Registration picker (one-time face registration) ────────────────────────
+function RegisterPicker({ employees, onPick, onCancel }: {
+  employees: EmpView[];
+  onPick: (e: EmpView) => void;
+  onCancel: () => void;
+}) {
   const [q, setQ] = useState('');
   const filtered = employees.filter((e) =>
     e.full_name.toLowerCase().includes(q.toLowerCase()) ||
@@ -47,16 +241,16 @@ function IdentityPicker({ employees, onPick, onExit }: { employees: EmpView[]; o
     <div className="h-full flex flex-col">
       <div className="bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 px-5 pt-12 pb-8 relative overflow-hidden">
         <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
-        <button onClick={onExit} className="relative flex items-center gap-1.5 text-blue-100 text-xs mb-4">
+        <button onClick={onCancel} className="relative flex items-center gap-1.5 text-blue-100 text-xs mb-4">
           <ArrowLeft size={14} /> Kembali
         </button>
         <div className="relative flex items-center gap-3">
           <div className="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center">
-            <Fingerprint size={22} className="text-white" />
+            <ScanFace size={22} className="text-white" />
           </div>
           <div>
-            <h1 className="text-white text-lg font-bold leading-tight">Siapa Anda?</h1>
-            <p className="text-blue-100 text-xs mt-0.5">Pilih profil untuk clock-in tanpa login</p>
+            <h1 className="text-white text-lg font-bold leading-tight">Daftarkan Wajah</h1>
+            <p className="text-blue-100 text-xs mt-0.5">Pilih profil Anda — pendaftaran cukup dilakukan sekali</p>
           </div>
         </div>
       </div>
@@ -95,732 +289,6 @@ function IdentityPicker({ employees, onPick, onExit }: { employees: EmpView[]; o
           {filtered.length === 0 && (
             <p className="text-center text-slate-400 text-sm py-10">Karyawan tidak ditemukan</p>
           )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Camera clock-in overlay ──────────────────────────────────────────────────
-type CamState = 'idle' | 'capturing' | 'matching' | 'confirm' | 'success' | 'error';
-
-function CameraOverlay({ emp, outlet, onClose, onDone }: {
-  emp: EmpView; outlet: OutletView; onClose: () => void; onDone: () => void;
-}) {
-  const [state, setState] = useState<CamState>('idle');
-  const [photo, setPhoto] = useState<string | null>(null);
-  const [blob, setBlob] = useState<Blob | null>(null);
-  const [faceScore, setFaceScore] = useState<number | null>(null);
-  const [faceNote, setFaceNote] = useState<string>('');
-  const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
-  const [processing, setProcessing] = useState(false);
-  const [msg, setMsg] = useState('');
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  const today = new Date().toISOString().split('T')[0];
-
-  useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (p) => setGps({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: true },
-    );
-  }, []);
-
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-  }, []);
-
-  useEffect(() => () => stopCamera(), [stopCamera]);
-
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
-      streamRef.current = stream;
-      setState('capturing');
-    } catch {
-      setMsg('Kamera tidak dapat diakses. Periksa izin kamera di pengaturan browser.');
-      setState('error');
-    }
-  };
-
-  useEffect(() => {
-    if (state === 'capturing' && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-    }
-  }, [state]);
-
-  const capture = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const ctx = canvasRef.current.getContext('2d')!;
-    canvasRef.current.width = videoRef.current.videoWidth;
-    canvasRef.current.height = videoRef.current.videoHeight;
-    ctx.drawImage(videoRef.current, 0, 0);
-    const dataUrl = canvasRef.current.toDataURL('image/jpeg', 0.85);
-    canvasRef.current.toBlob(async (b) => {
-      if (!b) return;
-      setPhoto(dataUrl);
-      setBlob(b);
-      stopCamera();
-      setState('matching');
-
-      try {
-        const { data: fps } = await supabase
-          .from('face_profiles')
-          .select('*, employee:employees!inner(*)')
-          .eq('status', 'verified');
-        const myProfiles = (fps ?? []).filter((fp: any) => fp?.employee?.id === emp.id);
-        if (emp.face_registered) {
-          // Face is required: a verified profile must exist and score >= 40.
-          if (myProfiles.length === 0) {
-            setFaceScore(null);
-            setFaceNote('Belum ada profil wajah terverifikasi.');
-            setMsg('Wajah belum terdaftar/terverifikasi. Daftarkan wajah Anda di tab Profil, atau hubungi HR.');
-            setState('error');
-            return;
-          }
-          const res = await findBestMatch(b, myProfiles as FaceProfile[]);
-          const conf = res?.confidence ?? 0;
-          setFaceScore(conf);
-          if (conf >= 40) {
-            setFaceNote(`Wajah cocok (${conf.toFixed(0)}%)`);
-          } else {
-            setMsg(`Wajah tidak dikenali (${conf.toFixed(0)}%). Pastikan pencahayaan cukup dan wajah terlihat jelas.`);
-            setState('error');
-            return;
-          }
-        } else {
-          // Not registered: selfie + GPS manual mode, optional soft check.
-          if (myProfiles.length > 0) {
-            const res = await findBestMatch(b, myProfiles as FaceProfile[]);
-            const conf = res?.confidence ?? 0;
-            setFaceScore(conf);
-            setFaceNote(conf >= 40 ? `Wajah cocok (${conf.toFixed(0)}%)` : `Wajah tidak dikenali (${conf.toFixed(0)}%) — lanjut manual?`);
-          } else {
-            setFaceScore(null);
-            setFaceNote('Belum ada wajah terdaftar — mode manual (selfie + GPS)');
-          }
-        }
-      } catch {
-        setFaceScore(null);
-        setFaceNote('Verifikasi wajah tidak tersedia — mode manual');
-      }
-      setState('confirm');
-    }, 'image/jpeg', 0.85);
-  };
-
-  // Hard gate: never allow a registered employee to bypass a failed face check.
-  useEffect(() => {
-    if (state === 'confirm' && emp.face_registered && (faceScore == null || faceScore < 40)) {
-      setMsg('Verifikasi wajah gagal. Silakan coba lagi.');
-      setState('error');
-    }
-  }, [state, emp.face_registered, faceScore]);
-
-  // Determine action (check-in vs check-out) from today's record
-  const [todayAtt, setTodayAtt] = useState<AttRow | null>(null);
-  useEffect(() => {
-    supabase.from('attendance').select('*').eq('employee_id', emp.id).eq('attendance_date', today).maybeSingle()
-      .then(({ data }) => setTodayAtt(data as AttRow | null));
-  }, [emp.id, today]);
-  const action: 'check_in' | 'check_out' = todayAtt?.check_in_time && !todayAtt?.check_out_time ? 'check_out' : 'check_in';
-
-  const confirmAction = async () => {
-    setProcessing(true);
-    const now = new Date();
-    const geofence = gps && outlet.latitude && outlet.longitude
-      ? haversineDistance(gps.lat, gps.lng, outlet.latitude!, outlet.longitude!) <= (outlet.geofence_radius_meters ?? 300)
-        ? 'inside' as const : 'outside' as const
-      : 'unknown' as const;
-
-    let photoUrl: string | null = null;
-    if (blob) {
-      const fileName = `emp_${emp.id}_${action}_${Date.now()}.jpg`;
-      const { data: uploadData } = await supabase.storage
-        .from('attendance-photos')
-        .upload(fileName, blob, { contentType: 'image/jpeg' });
-      photoUrl = uploadData ? supabase.storage.from('attendance-photos').getPublicUrl(uploadData.path).data.publicUrl : null;
-    }
-
-    if (action === 'check_in') {
-      const { data: shiftAssign } = await supabase.from('shift_assignments')
-        .select('*, shift_template:shift_templates(*)')
-        .eq('employee_id', emp.id)
-        .lte('effective_date', today)
-        .or(`end_date.is.null,end_date.gte.${today}`)
-        .order('effective_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const shift = shiftAssign?.shift_template as { id?: string; start_time?: string; late_tolerance_minutes?: number } | null;
-      let status: 'present' | 'late' = 'present';
-      if (shift?.start_time) {
-        const [h, m] = shift.start_time.split(':').map(Number);
-        const shiftStart = new Date(now);
-        shiftStart.setHours(h, m + (shift.late_tolerance_minutes ?? 10), 0, 0);
-        if (now > shiftStart) status = 'late';
-      }
-      const { error } = await supabase.from('attendance').upsert({
-        employee_id: emp.id,
-        outlet_id: outlet.id,
-        shift_template_id: shift?.id ?? null,
-        attendance_date: today,
-        check_in_time: now.toISOString(),
-        check_in_lat: gps?.lat ?? null,
-        check_in_lng: gps?.lng ?? null,
-        check_in_geofence: geofence,
-        check_in_selfie_url: photoUrl,
-        check_in_face_score: faceScore != null ? parseFloat(faceScore.toFixed(2)) : null,
-        status,
-      }, { onConflict: 'employee_id,attendance_date' });
-
-      if (error) { setMsg(`Check-in gagal: ${error.message}`); setState('error'); }
-      else {
-        setMsg(`Check-in berhasil! ${status === 'late' ? 'Sedikit terlambat.' : 'Tepat waktu. Selamat bekerja!'}`);
-        setState('success');
-      }
-    } else {
-      const { data: row } = await supabase.from('attendance').select('check_in_time').eq('id', todayAtt!.id).maybeSingle();
-      const dur = row?.check_in_time ? Math.floor((now.getTime() - new Date(row.check_in_time).getTime()) / 60000) : 0;
-      const { error } = await supabase.from('attendance').update({
-        check_out_time: now.toISOString(),
-        check_out_lat: gps?.lat ?? null,
-        check_out_lng: gps?.lng ?? null,
-        check_out_geofence: geofence,
-        check_out_selfie_url: photoUrl,
-        work_duration_minutes: dur,
-      }).eq('id', todayAtt!.id);
-      if (error) { setMsg(`Check-out gagal: ${error.message}`); setState('error'); }
-      else {
-        const h = Math.floor(dur / 60), m2 = dur % 60;
-        setMsg(`Check-out berhasil! Total kerja ${h}j ${m2}m. Terima kasih!`);
-        setState('success');
-      }
-    }
-    setProcessing(false);
-  };
-
-  useEffect(() => {
-    if (state === 'success') {
-      const t = setTimeout(() => { onDone(); }, 2600);
-      return () => clearTimeout(t);
-    }
-  }, [state, onDone]);
-
-  const timeNow = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-  return (
-    <div className="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-sm flex flex-col">
-      <div className="flex items-center justify-between px-5 pt-12 pb-2">
-        <button onClick={() => { stopCamera(); onClose(); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1.5">
-          <XCircle size={15} /> Batal
-        </button>
-        <span className="text-white/70 text-sm font-medium">{action === 'check_in' ? 'Clock In' : 'Clock Out'}</span>
-      </div>
-
-      <div className="flex-1 flex flex-col items-center justify-center px-6">
-        {state === 'idle' && (
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div className="w-32 h-32 rounded-full border-4 border-dashed border-blue-400/40 flex items-center justify-center animate-pulse">
-              <Camera size={52} className="text-blue-300/80" />
-            </div>
-            <div>
-              <p className="text-white font-bold text-xl">{action === 'check_in' ? 'Mulai Bekerja' : 'Akhiri Shift'}</p>
-              <p className="text-slate-400 text-sm mt-1">Hadapkan wajah ke kamera untuk absen</p>
-            </div>
-            <button
-              onClick={startCamera}
-              className="bg-gradient-to-r from-blue-600 to-blue-500 text-white font-bold px-10 py-4 rounded-2xl shadow-lg shadow-blue-900/40 active:scale-95 transition-all flex items-center gap-3"
-            >
-              <Camera size={22} /> Buka Kamera
-            </button>
-            <button
-              onClick={() => { setPhoto(null); setBlob(null); setFaceScore(null); setFaceNote('Absen manual tanpa foto'); setState('confirm'); }}
-              className="text-slate-500 hover:text-slate-300 text-xs flex items-center gap-1.5"
-            >
-              <User size={13} /> Absen manual tanpa kamera
-            </button>
-          </div>
-        )}
-
-        {state === 'capturing' && (
-          <div className="flex flex-col items-center gap-5 w-full">
-            <p className="text-white font-semibold">Posisikan wajah dalam lingkaran</p>
-            <div className="relative w-full max-w-sm rounded-3xl overflow-hidden bg-black border border-blue-500/50 aspect-[3/4]">
-              <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-44 h-52 rounded-full border-4 border-blue-400/70 border-dashed" />
-              </div>
-              <div className="absolute bottom-3 left-0 right-0 flex justify-center">
-                <span className="bg-black/50 text-white text-[11px] px-3 py-1.5 rounded-full">Pastikan pencahayaan cukup</span>
-              </div>
-            </div>
-            <canvas ref={canvasRef} className="hidden" />
-            <button
-              onClick={capture}
-              className="w-full max-w-sm bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl active:scale-[0.98] transition-all"
-            >
-              Ambil Foto & Lanjutkan
-            </button>
-          </div>
-        )}
-
-        {state === 'matching' && (
-          <div className="flex flex-col items-center gap-5">
-            {photo && <img src={photo} alt="" className="w-28 h-28 rounded-full object-cover border-4 border-blue-500 shadow-2xl" />}
-            <div className="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin" />
-            <p className="text-white font-semibold">Memproses absen...</p>
-          </div>
-        )}
-
-        {state === 'confirm' && (
-          <div className="flex flex-col items-center gap-5 w-full max-w-sm">
-            <div className="w-full bg-white rounded-3xl p-5 flex items-center gap-4">
-              {photo ? (
-                <img src={photo} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-blue-300 flex-shrink-0" />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-700 text-white flex items-center justify-center text-xl font-bold flex-shrink-0">
-                  {getInitials(emp.full_name)}
-                </div>
-              )}
-              <div className="min-w-0">
-                <p className="font-bold text-slate-900 truncate">{emp.full_name}</p>
-                <p className="text-xs text-slate-500">{emp.job_title ?? emp.employee_code}</p>
-                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  <Badge className={action === 'check_in' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}>
-                    {action === 'check_in' ? <LogIn size={11} className="inline mr-1" /> : <LogOut size={11} className="inline mr-1" />}
-                    {action === 'check_in' ? 'CHECK IN' : 'CHECK OUT'}
-                  </Badge>
-                  {faceScore != null && (
-                    <Badge className={faceScore >= 40 ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}>
-                      <ShieldCheck size={11} className="inline mr-1" />Face {faceScore.toFixed(0)}%
-                    </Badge>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {faceNote && (
-              <p className={`text-xs flex items-center gap-1.5 ${faceScore != null && faceScore < 40 ? 'text-amber-300' : 'text-slate-400'}`}>
-                {faceScore != null && faceScore < 40 ? <AlertTriangle size={12} /> : <ShieldCheck size={12} />}
-                {faceNote}
-              </p>
-            )}
-
-            <div className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 grid grid-cols-3 text-center">
-              <div>
-                <p className="text-[10px] text-slate-400 uppercase">Waktu</p>
-                <p className="text-white font-mono text-sm">{timeNow}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-400 uppercase">Lokasi</p>
-                <p className="text-white text-sm">{gps ? (geofenceLabel(outlet, gps)) : 'Menunggu GPS...'}</p>
-              </div>
-              <div>
-                <p className="text-[10px] text-slate-400 uppercase">Outlet</p>
-                <p className="text-white text-xs truncate px-1">{outlet.name}</p>
-              </div>
-            </div>
-
-            <button
-              onClick={confirmAction}
-              disabled={processing}
-              className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 disabled:from-slate-600 disabled:to-slate-500 text-white font-bold py-4 rounded-2xl active:scale-[0.98] transition-all shadow-lg shadow-emerald-900/30"
-            >
-              {processing
-                ? <><span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin align-middle mr-2" />Memproses...</>
-                : <><CheckCircle size={18} className="inline mr-2 align-middle" />Konfirmasi Absen</>}
-            </button>
-          </div>
-        )}
-
-        {state === 'success' && (
-          <div className="flex flex-col items-center gap-5 text-center">
-            <div className="w-24 h-24 rounded-full bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center animate-bounce">
-              <CheckCircle size={48} className="text-emerald-400" />
-            </div>
-            <p className="text-white font-bold text-xl">{msg}</p>
-            <p className="text-slate-500 text-xs">Mengembalikan...</p>
-          </div>
-        )}
-
-        {state === 'error' && (
-          <div className="flex flex-col items-center gap-5 text-center">
-            <div className="w-24 h-24 rounded-full bg-red-500/20 border border-red-400/40 flex items-center justify-center">
-              <XCircle size={44} className="text-red-400" />
-            </div>
-            <p className="text-white font-semibold">{msg}</p>
-            <button onClick={() => setState('idle')} className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1.5">
-              <RefreshCw size={14} /> Coba Lagi
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function geofenceLabel(outlet: OutletView, gps: { lat: number; lng: number }): string {
-  if (!outlet.latitude || !outlet.longitude) return 'Lokasi tersedia';
-  const d = haversineDistance(gps.lat, gps.lng, outlet.latitude, outlet.longitude);
-  return d <= (outlet.geofence_radius_meters ?? 300) ? 'Di dalam area' : 'Di luar area';
-}
-
-// ─── Face self-registration (no admin needed) ────────────────────────────────
-type RegStep = 'front' | 'left' | 'right';
-const REG_STEPS: Array<{ key: RegStep; label: string; hint: string }> = [
-  { key: 'front', label: 'Depan', hint: 'Hadap kamera langsung' },
-  { key: 'left', label: 'Kiri', hint: 'Miringkan sedikit ke kiri' },
-  { key: 'right', label: 'Kanan', hint: 'Miringkan sedikit ke kanan' },
-];
-
-function FaceRegisterOverlay({ emp, onClose, onDone }: { emp: EmpView; onClose: () => void; onDone: () => void }) {
-  const [stepIdx, setStepIdx] = useState(0);
-  const [photos, setPhotos] = useState<Record<string, string | null>>({ front: null, left: null, right: null });
-  const [live, setLive] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState('');
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  const step = REG_STEPS[stepIdx];
-  const done = stepIdx >= REG_STEPS.length;
-  const allCaptured = REG_STEPS.every((s) => !!photos[s.key]);
-
-  const stopCamera = useCallback(() => {
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-    setLive(false);
-  }, []);
-
-  useEffect(() => () => stopCamera(), [stopCamera]);
-
-  const startCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
-      streamRef.current = stream;
-      setLive(true);
-    } catch {
-      setMsg('Kamera tidak dapat diakses. Periksa izin kamera di pengaturan browser.');
-    }
-  };
-
-  useEffect(() => {
-    if (live && videoRef.current && streamRef.current) {
-      videoRef.current.srcObject = streamRef.current;
-    }
-  }, [live]);
-
-  const capture = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    const ctx = canvasRef.current.getContext('2d')!;
-    canvasRef.current.width = videoRef.current.videoWidth;
-    canvasRef.current.height = videoRef.current.videoHeight;
-    ctx.drawImage(videoRef.current, 0, 0);
-    canvasRef.current.toBlob(async (b) => {
-      if (!b) return;
-      const fileName = `face_${emp.id}_${step.key}_${Date.now()}.jpg`;
-      const { data: uploadData, error: uploadErr } = await supabase.storage
-        .from('face-photos')
-        .upload(fileName, b, { contentType: 'image/jpeg', upsert: true });
-      if (uploadErr || !uploadData) { setMsg('Gagal mengunggah foto. Coba lagi.'); return; }
-      const url = supabase.storage.from('face-photos').getPublicUrl(uploadData.path).data.publicUrl;
-      setPhotos((p) => ({ ...p, [step.key]: url }));
-      stopCamera();
-      setStepIdx((i) => i + 1);
-    }, 'image/jpeg', 0.85);
-  };
-
-  const save = async () => {
-    if (!allCaptured) return;
-    setSaving(true);
-    const { error } = await supabase.from('face_profiles').upsert({
-      employee_id: emp.id,
-      photo_front_url: photos.front,
-      photo_left_url: photos.left,
-      photo_right_url: photos.right,
-      status: 'verified',
-      registered_at: new Date().toISOString(),
-      verified_at: new Date().toISOString(),
-    }, { onConflict: 'employee_id' });
-    if (!error) {
-      await supabase.from('employees').update({ face_registered: true }).eq('id', emp.id);
-    }
-    setSaving(false);
-    if (error) { setMsg(`Gagal menyimpan: ${error.message}`); return; }
-    onDone();
-  };
-
-  return (
-    <div className="absolute inset-0 z-50 bg-slate-950/95 backdrop-blur-sm flex flex-col">
-      <div className="flex items-center justify-between px-5 pt-12 pb-2">
-        <button onClick={() => { stopCamera(); onClose(); }} className="text-slate-400 hover:text-white text-sm flex items-center gap-1.5">
-          <XCircle size={15} /> Batal
-        </button>
-        <span className="text-white/70 text-sm font-medium">Daftarkan Wajah</span>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 pb-8">
-        {!done ? (
-          <div className="flex flex-col items-center gap-5 pt-2">
-            {/* Step indicator */}
-            <div className="flex gap-3">
-              {REG_STEPS.map((s, i) => (
-                <div key={s.key} className={`flex items-center gap-1.5 text-[11px] font-semibold ${i < stepIdx ? 'text-emerald-400' : i === stepIdx ? 'text-white' : 'text-slate-500'}`}>
-                  {i < stepIdx ? <CheckCircle size={13} /> : <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] ${i === stepIdx ? 'bg-blue-600' : 'bg-slate-700'}`}>{i + 1}</span>}
-                  {s.label}
-                </div>
-              ))}
-            </div>
-
-            <div className="text-center">
-              <p className="text-white font-bold text-lg">Foto {step.label} — hadapkan wajah</p>
-              <p className="text-slate-400 text-xs mt-1">{step.hint} · pastikan pencahayaan cukup</p>
-            </div>
-
-            {live ? (
-              <div className="relative w-full max-w-sm rounded-3xl overflow-hidden bg-black border border-blue-500/50 aspect-[3/4]">
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="w-44 h-52 rounded-full border-4 border-blue-400/70 border-dashed" />
-                </div>
-                <div className="absolute bottom-3 left-0 right-0 flex justify-center">
-                  <span className="bg-black/50 text-white text-[11px] px-3 py-1.5 rounded-full">Posisikan wajah dalam lingkaran</span>
-                </div>
-              </div>
-            ) : (
-              <div className="w-full max-w-sm aspect-[3/4] rounded-3xl border-2 border-dashed border-slate-700 flex flex-col items-center justify-center gap-3 text-slate-500 bg-slate-900/40">
-                <ScanFace size={40} />
-                <p className="text-xs">{photos[step.key] ? 'Foto siap — lanjut langkah berikutnya' : `Foto ${step.label} belum diambil`}</p>
-              </div>
-            )}
-            <canvas ref={canvasRef} className="hidden" />
-
-            {msg && <p className="text-red-400 text-xs text-center">{msg}</p>}
-
-            <div className="flex gap-3 w-full max-w-sm">
-              {live ? (
-                <>
-                  <button onClick={stopCamera} className="flex-1 py-3.5 rounded-2xl border border-white/20 text-white text-sm font-semibold">Ulangi</button>
-                  <button onClick={capture} className="flex-[2] py-3.5 rounded-2xl bg-blue-600 text-white text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-                    <Camera size={16} /> Ambil Foto {step.label}
-                  </button>
-                </>
-              ) : (
-                <button onClick={startCamera} className="w-full py-3.5 rounded-2xl bg-blue-600 text-white text-sm font-bold flex items-center justify-center gap-2 active:scale-[0.98] transition-all">
-                  <Camera size={16} /> Buka Kamera
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="flex flex-col items-center gap-5 pt-4">
-            <div className="text-center">
-              <p className="text-white font-bold text-lg">Foto wajah terkumpul ✅</p>
-              <p className="text-slate-400 text-xs mt-1">3 sudut wajah sudah direkam. Simpan untuk mengaktifkan absen wajah.</p>
-            </div>
-            <div className="grid grid-cols-3 gap-2 w-full max-w-sm">
-              {REG_STEPS.map((s) => (
-                <div key={s.key} className="aspect-[3/4] rounded-xl overflow-hidden border border-slate-700 bg-slate-900">
-                  {photos[s.key] ? <img src={photos[s.key]!} alt={s.label} className="w-full h-full object-cover" /> : <div className="flex items-center justify-center h-full text-slate-600"><Camera size={20} /></div>}
-                </div>
-              ))}
-            </div>
-            {msg && <p className="text-red-400 text-xs">{msg}</p>}
-            <button onClick={save} disabled={saving}
-              className="w-full max-w-sm py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold active:scale-[0.98] transition-all shadow-lg shadow-emerald-900/30 disabled:opacity-50">
-              {saving ? 'Menyimpan...' : <><ShieldCheck size={18} className="inline mr-2 align-middle" />Simpan & Aktifkan Absen Wajah</>}
-            </button>
-            <button onClick={() => { stopCamera(); setStepIdx(0); setPhotos({ front: null, left: null, right: null }); setMsg(''); }}
-              className="text-slate-500 hover:text-slate-300 text-xs flex items-center gap-1.5">
-              <RefreshCw size={12} /> Foto ulang dari awal
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── Absen tab ────────────────────────────────────────────────────────────────
-function AbsenTab({ emp, outlet, onOutletChange, onOpenCamera, onRegisterFace, onRefreshKey }: {
-  emp: EmpView; outlet: OutletView; onOutletChange: (o: OutletView) => void; onOpenCamera: () => void; onRegisterFace: () => void; onRefreshKey: number;
-}) {
-  const [clock, setClock] = useState(new Date());
-  const [todayAtt, setTodayAtt] = useState<AttRow | null>(null);
-  const [recent, setRecent] = useState<AttRow[]>([]);
-  const [shiftInfo, setShiftInfo] = useState<string>('');
-
-  useEffect(() => {
-    const t = setInterval(() => setClock(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  const load = useCallback(() => {
-    const today = new Date().toISOString().split('T')[0];
-    supabase.from('attendance')
-      .select('*, shift:shift_templates(name, start_time, end_time)')
-      .eq('employee_id', emp.id)
-      .eq('attendance_date', today)
-      .maybeSingle()
-      .then(({ data }) => setTodayAtt(data as AttRow | null));
-    supabase.from('attendance')
-      .select('*, shift:shift_templates(name, start_time, end_time)')
-      .eq('employee_id', emp.id)
-      .order('attendance_date', { ascending: false })
-      .limit(7)
-      .then(({ data }) => setRecent((data as AttRow[]) ?? []));
-  }, [emp.id]);
-
-  useEffect(() => { load(); }, [load, onRefreshKey]);
-
-  useEffect(() => {
-    supabase.from('shift_assignments')
-      .select('*, shift_template:shift_templates(*)')
-      .eq('employee_id', emp.id)
-      .lte('effective_date', new Date().toISOString().split('T')[0])
-      .or(`end_date.is.null,end_date.gte.${new Date().toISOString().split('T')[0]}`)
-      .order('effective_date', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        const s = data?.shift_template as { name?: string; start_time?: string; end_time?: string } | null;
-        setShiftInfo(s ? `${s.name} · ${formatTime(s.start_time)}–${formatTime(s.end_time)}` : '');
-      });
-  }, [emp.id]);
-
-  const checkedIn = !!todayAtt?.check_in_time;
-  const checkedOut = checkedIn && !!todayAtt?.check_out_time;
-
-  return (
-    <div className="px-4 pt-4 space-y-4">
-      {/* Greeting */}
-      <div className="bg-gradient-to-br from-blue-700 via-blue-600 to-blue-500 rounded-3xl p-5 text-white shadow-lg shadow-blue-900/20 relative overflow-hidden">
-        <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10 blur-xl" />
-        <div className="flex items-center justify-between relative">
-          <div>
-            <p className="text-blue-100 text-xs">Halo, selamat {clock.getHours() < 11 ? 'pagi' : clock.getHours() < 15 ? 'siang' : 'sore'} 👋</p>
-            <p className="font-bold text-lg mt-0.5">{emp.full_name.split(' ')[0]}</p>
-          </div>
-          <div className="text-right">
-            <p className="font-mono text-xl font-bold">{clock.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</p>
-            <p className="text-blue-100 text-[11px]">{clock.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 mt-4 text-xs text-blue-100">
-          <MapPin size={13} /> {outlet.name} · {outlet.outlet_code}
-        </div>
-      </div>
-
-      {/* Outlet switch */}
-      {emp.backup_outlet && emp.backup_outlet.id !== outlet.id && (
-        <div className="flex gap-2">
-          {[emp.primary_outlet, emp.backup_outlet].filter(Boolean).map((o) => o && (
-            <button
-              key={o.id}
-              onClick={() => onOutletChange(o)}
-              className={`flex-1 rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
-                outlet.id === o.id
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-slate-200 bg-white text-slate-500'
-              }`}
-            >
-              <Building2 size={12} className="inline mr-1 align-middle" /> {o.name}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Today status */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-        <div className="flex items-center justify-between mb-4">
-          <p className="font-bold text-slate-900 text-sm">Absen Hari Ini</p>
-          {shiftInfo && (
-            <span className="text-[11px] text-slate-400 flex items-center gap-1">
-              <Clock size={11} /> {shiftInfo}
-            </span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 mb-5">
-          <div className={`rounded-2xl p-3.5 ${checkedIn ? 'bg-emerald-50 border border-emerald-100' : 'bg-slate-50 border border-slate-100'}`}>
-            <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Clock In</p>
-            <p className={`font-bold text-lg ${checkedIn ? 'text-emerald-700' : 'text-slate-400'}`}>
-              {checkedIn ? formatTime(todayAtt?.check_in_time) : '--:--'}
-            </p>
-            {todayAtt?.check_in_geofence && (
-              <Badge className={STATUS_COLORS[todayAtt.check_in_geofence]}>
-                <MapPin size={10} className="inline mr-1" />{todayAtt.check_in_geofence}
-              </Badge>
-            )}
-          </div>
-          <div className={`rounded-2xl p-3.5 ${checkedOut ? 'bg-orange-50 border border-orange-100' : 'bg-slate-50 border border-slate-100'}`}>
-            <p className="text-[10px] uppercase tracking-wider text-slate-400 mb-1">Clock Out</p>
-            <p className={`font-bold text-lg ${checkedOut ? 'text-orange-700' : 'text-slate-400'}`}>
-              {checkedOut ? formatTime(todayAtt?.check_out_time) : '--:--'}
-            </p>
-            {checkedOut && todayAtt?.work_duration_minutes != null && (
-              <p className="text-[11px] text-orange-600 font-medium">
-                {Math.floor(todayAtt.work_duration_minutes / 60)}j {todayAtt.work_duration_minutes % 60}m
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Big action button */}
-        {!checkedOut && (
-          <button
-            onClick={onOpenCamera}
-            className={`w-full rounded-2xl py-4 font-bold text-white text-base active:scale-[0.98] transition-all shadow-lg ${
-              checkedIn
-                ? 'bg-gradient-to-r from-orange-500 to-amber-500 shadow-orange-200'
-                : 'bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-200 animate-pulse-glow'
-            }`}
-          >
-            {checkedIn ? <><LogOut size={18} className="inline mr-2 align-middle" />Clock Out Sekarang</> : <><LogIn size={18} className="inline mr-2 align-middle" />Clock In Sekarang</>}
-          </button>
-        )}
-        {checkedOut && (
-          <div className="w-full rounded-2xl bg-emerald-50 border border-emerald-100 py-3.5 text-center text-emerald-700 text-sm font-semibold flex items-center justify-center gap-2">
-            <CheckCircle size={16} /> Shift selesai — sampai jumpa!
-          </div>
-        )}
-        {emp.face_registered ? (
-          <p className="text-center text-[11px] text-emerald-600 font-medium mt-3 flex items-center justify-center gap-1">
-            <ShieldCheck size={11} /> Absen wajib verifikasi wajah (skor ≥ 40%)
-          </p>
-        ) : (
-          <button
-            onClick={onRegisterFace}
-            className="mt-3 w-full rounded-xl border border-dashed border-blue-300 bg-blue-50/60 py-2.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
-          >
-            <ScanFace size={13} /> Daftarkan Wajah untuk Absen Wajah
-          </button>
-        )}
-      </div>
-
-      {/* Recent */}
-      <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-        <p className="font-bold text-slate-900 text-sm mb-3">Riwayat Terakhir</p>
-        <div className="space-y-2.5">
-          {recent.map((a) => (
-            <div key={a.id} className="flex items-center gap-3">
-              <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${STATUS_COLORS[a.status ?? 'present']}`}>
-                <Clock size={15} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-800">{formatDate(a.attendance_date)}</p>
-                <p className="text-[11px] text-slate-400">
-                  {a.shift?.name ?? 'Shift'} · {formatTime(a.check_in_time)} – {formatTime(a.check_out_time)}
-                </p>
-              </div>
-              <Badge className={STATUS_COLORS[a.status ?? 'present']}>{a.status}</Badge>
-            </div>
-          ))}
-          {recent.length === 0 && <p className="text-center text-slate-400 text-sm py-4">Belum ada riwayat absensi</p>}
         </div>
       </div>
     </div>
@@ -1274,7 +742,12 @@ function SlipDetail({ item, emp, periodLabel }: { item: any; emp: EmpView; perio
 }
 
 // ─── Profil tab ───────────────────────────────────────────────────────────────
-function ProfilTab({ emp, onSwitch, onExit }: { emp: EmpView; onSwitch: () => void; onExit: () => void }) {
+function ProfilTab({ emp, onRegisterFace, onLock, onExit }: {
+  emp: EmpView;
+  onRegisterFace: () => void;
+  onLock: () => void;
+  onExit?: () => void;
+}) {
   const rows: Array<[string, string]> = [
     ['Nama Lengkap', emp.full_name],
     ['Kode Karyawan', emp.employee_code],
@@ -1294,6 +767,26 @@ function ProfilTab({ emp, onSwitch, onExit }: { emp: EmpView; onSwitch: () => vo
         <p className="font-bold text-slate-900">{emp.full_name}</p>
         <p className="text-xs text-slate-400 mt-0.5">{emp.job_title} · {emp.primary_outlet?.name}</p>
       </div>
+
+      {emp.face_registered ? (
+        <div className="bg-white rounded-3xl border border-emerald-100 shadow-sm p-5 flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
+            <ShieldCheck size={20} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-slate-900">Absen Wajah Aktif</p>
+            <p className="text-xs text-slate-400">Masuk & absen otomatis dengan pengenalan wajah Anda</p>
+          </div>
+          <Badge className="bg-emerald-100 text-emerald-700 flex-shrink-0">AKTIF</Badge>
+        </div>
+      ) : (
+        <button
+          onClick={onRegisterFace}
+          className="w-full rounded-2xl border-2 border-dashed border-blue-300 bg-blue-50/60 py-3.5 text-sm font-semibold text-blue-600 hover:bg-blue-50 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+        >
+          <ScanFace size={16} /> Daftarkan Wajah Sekarang
+        </button>
+      )}
 
       <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
         <div className="space-y-3.5">
@@ -1320,25 +813,36 @@ function ProfilTab({ emp, onSwitch, onExit }: { emp: EmpView; onSwitch: () => vo
       </div>
 
       <button
-        onClick={onSwitch}
-        className="w-full py-3.5 rounded-2xl border-2 border-dashed border-slate-300 text-slate-500 text-sm font-semibold hover:border-blue-400 hover:text-blue-600 transition-colors"
+        onClick={onRegisterFace}
+        className="w-full py-3.5 rounded-2xl border border-slate-200 bg-white text-slate-600 text-sm font-semibold hover:border-blue-300 hover:text-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
       >
-        <User size={15} className="inline mr-1.5 align-middle" />Ganti Karyawan
+        <RefreshCw size={15} /> Daftar Ulang Wajah
       </button>
       <button
-        onClick={onExit}
-        className="w-full py-3.5 rounded-2xl bg-slate-900 text-white text-sm font-bold active:scale-[0.98] transition-all"
+        onClick={onLock}
+        className="w-full py-3.5 rounded-2xl bg-slate-900 text-white text-sm font-bold active:scale-[0.98] transition-all flex items-center justify-center gap-2"
       >
-        Kembali ke Halaman Admin
+        <Lock size={15} /> Kunci Aplikasi
       </button>
+      {onExit && (
+        <button
+          onClick={onExit}
+          className="w-full py-3.5 rounded-2xl border border-slate-200 text-slate-500 text-sm font-semibold active:scale-[0.98] transition-all"
+        >
+          Kembali ke Halaman Admin
+        </button>
+      )}
     </div>
   );
 }
 
 // ─── Main Employee App ────────────────────────────────────────────────────────
-export function EmployeeApp({ onExit }: { onExit: () => void }) {
+export function EmployeeApp({ onExit }: { onExit?: () => void }) {
   const [tab, setTab] = useState<Tab>('absen');
-  const [employees, setEmployees] = useState<EmpView[]>([]);
+  const [stage, setStage] = useState<'login' | 'register' | 'app'>('login');
+  const [candidates, setCandidates] = useState<LoginCandidate[]>([]);
+  const [regCandidates, setRegCandidates] = useState<EmpView[]>([]);
+  const [regEmp, setRegEmp] = useState<EmpView | null>(null);
   const [emp, setEmp] = useState<EmpView | null>(null);
   const [outlet, setOutlet] = useState<OutletView | null>(null);
   const [cameraOpen, setCameraOpen] = useState(false);
@@ -1346,49 +850,45 @@ export function EmployeeApp({ onExit }: { onExit: () => void }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    Promise.all([
+  const loadData = useCallback(() => {
+    return Promise.all([
+      supabase.from('face_profiles')
+        .select('*, employee:employees!inner(*, primary_outlet:outlets!primary_outlet_id(*), backup_outlet:outlets!backup_outlet_id(*))')
+        .eq('status', 'verified'),
       supabase.from('employees')
         .select('*, primary_outlet:outlets!primary_outlet_id(*), backup_outlet:outlets!backup_outlet_id(*)')
         .in('status', ['active', 'probation', 'contract'])
         .order('full_name'),
-      supabase.from('outlets').select('*').eq('is_active', true),
-    ]).then(([{ data: emps }]) => {
+    ]).then(([{ data: fps }, { data: emps }]) => {
       const list = (emps ?? []) as EmpView[];
-      setEmployees(list);
-      const savedId = localStorage.getItem(EMP_KEY);
-      const found = savedId ? list.find((e) => e.id === savedId) : null;
-      const picked = found ?? list[0] ?? null;
-      if (picked) {
-        setEmp(picked);
-        setOutlet((picked.primary_outlet as OutletView | null) ?? null);
-      }
+      setRegCandidates(list);
+      const cands: LoginCandidate[] = ((fps ?? []) as any[])
+        .filter((fp) => fp?.employee)
+        .map((fp) => ({ profile: fp as FaceProfile, emp: fp.employee as EmpView }));
+      setCandidates(cands);
       setReady(true);
     });
   }, []);
 
-  const handlePick = (e: EmpView) => {
-    localStorage.setItem(EMP_KEY, e.id);
+  useEffect(() => { loadData(); }, [loadData]);
+
+  const handleLogin = (e: EmpView) => {
     setEmp(e);
     setOutlet((e.primary_outlet as OutletView | null) ?? null);
     setTab('absen');
+    setStage('app');
   };
 
-  if (!ready) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center bg-slate-100">
-        <div className="w-10 h-10 border-[3px] border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-slate-400 text-sm">Memuat Aplikasi Karyawan...</p>
-      </div>
-    );
-  }
-
-  if (!emp || !outlet) {
-    return <IdentityPicker employees={employees} onPick={handlePick} onExit={onExit} />;
-  }
+  const handleLock = () => {
+    setEmp(null);
+    setOutlet(null);
+    setTab('absen');
+    setStage('login');
+  };
 
   const NAV: Array<{ id: Tab; label: string; icon: React.ReactNode }> = [
     { id: 'absen', label: 'Absen', icon: <Fingerprint size={20} /> },
+    { id: 'jadwal', label: 'Jadwal', icon: <CalendarRange size={20} /> },
     { id: 'izin', label: 'Izin', icon: <CalendarDays size={20} /> },
     { id: 'slip', label: 'Slip Gaji', icon: <Wallet size={20} /> },
     { id: 'profil', label: 'Profil', icon: <User size={20} /> },
@@ -1397,63 +897,102 @@ export function EmployeeApp({ onExit }: { onExit: () => void }) {
   return (
     <div className="h-screen w-full bg-slate-200 flex items-center justify-center">
       <div className="relative h-full w-full max-w-md bg-slate-100 overflow-hidden flex flex-col md:h-[min(900px,calc(100vh-56px))] md:rounded-[2.5rem] md:border-[10px] md:border-slate-900 md:shadow-2xl">
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto pb-24 page-enter">
-          {tab === 'absen' && emp && outlet && (
-            <AbsenTab
-              emp={emp}
-              outlet={outlet}
-              onOutletChange={setOutlet}
-              onOpenCamera={() => setCameraOpen(true)}
-              onRegisterFace={() => setRegOpen(true)}
-              onRefreshKey={refreshKey}
-            />
-          )}
-          {tab === 'izin' && emp && <IzinTab emp={emp} />}
-          {tab === 'slip' && emp && <SlipTab emp={emp} />}
-          {tab === 'profil' && emp && (
-            <ProfilTab emp={emp} onSwitch={() => setEmp(null)} onExit={onExit} />
-          )}
-        </div>
-
-        {/* Bottom nav */}
-        <nav className="absolute bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-lg border-t border-slate-200 pb-[env(safe-area-inset-bottom)]">
-          <div className="grid grid-cols-4">
-            {NAV.map((n) => (
-              <button
-                key={n.id}
-                onClick={() => setTab(n.id)}
-                className={`flex flex-col items-center gap-0.5 py-2.5 transition-colors ${
-                  tab === n.id ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
-                <span className={`transition-transform ${tab === n.id ? '-translate-y-0.5 scale-105' : ''}`}>{n.icon}</span>
-                <span className="text-[10px] font-semibold">{n.label}</span>
-                {tab === n.id && <span className="w-6 h-0.5 rounded-full bg-blue-600 mt-0.5" />}
-              </button>
-            ))}
+        {!ready ? (
+          <div className="h-full flex flex-col items-center justify-center bg-slate-100">
+            <div className="w-10 h-10 border-[3px] border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
+            <p className="text-slate-400 text-sm">Memuat Aplikasi Karyawan...</p>
           </div>
-        </nav>
-
-        {/* Camera overlay */}
-        {cameraOpen && emp && outlet && (
-          <CameraOverlay
-            emp={emp}
-            outlet={outlet}
-            onClose={() => setCameraOpen(false)}
-            onDone={() => { setCameraOpen(false); setRefreshKey((k) => k + 1); }}
+        ) : stage === 'login' ? (
+          <FaceLogin
+            candidates={candidates}
+            onLogin={handleLogin}
+            onRegister={() => setStage('register')}
+            onExit={onExit}
           />
+        ) : stage === 'register' ? (
+          <RegisterPicker
+            employees={regCandidates}
+            onPick={(e) => { setRegEmp(e); setRegOpen(true); }}
+            onCancel={() => setStage('login')}
+          />
+        ) : (
+          <>
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto pb-24 page-enter">
+              {tab === 'absen' && emp && outlet && (
+                <AbsenTab
+                  emp={emp}
+                  outlet={outlet}
+                  onOutletChange={setOutlet}
+                  onOpenCamera={() => setCameraOpen(true)}
+                  onRegisterFace={() => setRegOpen(true)}
+                  onRefreshKey={refreshKey}
+                />
+              )}
+              {tab === 'jadwal' && emp && outlet && <JadwalTab emp={emp} outlet={outlet} />}
+              {tab === 'izin' && emp && <IzinTab emp={emp} />}
+              {tab === 'slip' && emp && <SlipTab emp={emp} />}
+              {tab === 'profil' && emp && (
+                <ProfilTab
+                  emp={emp}
+                  onRegisterFace={() => setRegOpen(true)}
+                  onLock={handleLock}
+                  onExit={onExit}
+                />
+              )}
+              {emp && !outlet && (
+                <div className="px-4 pt-10 text-center">
+                  <p className="text-slate-400 text-sm">Outlet belum diatur untuk akun ini. Hubungi HR.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Bottom nav */}
+            <nav className="absolute bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur-lg border-t border-slate-200 pb-[env(safe-area-inset-bottom)]">
+              <div className="grid grid-cols-5">
+                {NAV.map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => setTab(n.id)}
+                    className={`flex flex-col items-center gap-0.5 py-2.5 transition-colors ${
+                      tab === n.id ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'
+                    }`}
+                  >
+                    <span className={`transition-transform ${tab === n.id ? '-translate-y-0.5 scale-105' : ''}`}>{n.icon}</span>
+                    <span className="text-[10px] font-semibold">{n.label}</span>
+                    {tab === n.id && <span className="w-6 h-0.5 rounded-full bg-blue-600 mt-0.5" />}
+                  </button>
+                ))}
+              </div>
+            </nav>
+
+            {/* Camera overlay */}
+            {cameraOpen && emp && outlet && (
+              <CameraOverlay
+                emp={emp}
+                outlet={outlet}
+                onClose={() => setCameraOpen(false)}
+                onDone={() => { setCameraOpen(false); setRefreshKey((k) => k + 1); }}
+              />
+            )}
+          </>
         )}
 
-        {/* Face registration overlay */}
-        {regOpen && emp && (
+        {/* Face registration overlay (first-time registration + re-register) */}
+        {regOpen && (regEmp || emp) && (
           <FaceRegisterOverlay
-            emp={emp}
+            emp={regEmp ?? emp!}
             onClose={() => setRegOpen(false)}
             onDone={() => {
               setRegOpen(false);
-              setEmp((e) => (e ? { ...e, face_registered: true } : e));
-              setRefreshKey((k) => k + 1);
+              setRegEmp(null);
+              loadData();
+              if (stage === 'app' && emp) {
+                setEmp((e) => (e ? { ...e, face_registered: true } : e));
+                setRefreshKey((k) => k + 1);
+              } else {
+                setStage('login');
+              }
             }}
           />
         )}
