@@ -7,6 +7,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { findBestMatch } from '../../lib/faceMatch';
 import type { FaceProfile } from '../../lib/faceMatch';
+import { getCurrentPosition } from '../../lib/location';
 import {
   formatDate, formatTime, getInitials, haversineDistance, STATUS_COLORS,
 } from '../../lib/utils';
@@ -34,11 +35,7 @@ export function CameraOverlay({ emp, outlet, onClose, onDone }: {
   const today = new Date().toISOString().split('T')[0];
 
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (p) => setGps({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: true },
-    );
+    getCurrentPosition().then(setGps).catch(() => {});
   }, []);
 
   const stopCamera = useCallback(() => {

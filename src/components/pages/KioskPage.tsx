@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Camera, CheckCircle, XCircle, MapPin, RefreshCw, User, LogIn, LogOut } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { haversineDistance, STATUS_COLORS } from '../../lib/utils';
+import { getCurrentPosition } from '../../lib/location';
 import { Badge } from '../ui/Badge';
 import { findBestMatch } from '../../lib/faceMatch';
 import type { FaceProfile } from '../../lib/faceMatch';
@@ -59,11 +60,7 @@ export function KioskPage() {
   // Get GPS continuously when a outlet is selected
   useEffect(() => {
     if (!selectedOutlet) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setGpsLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: true },
-    );
+    getCurrentPosition().then((g) => setGpsLocation(g)).catch(() => {});
   }, [selectedOutlet]);
 
   // Reset to idle after success/error

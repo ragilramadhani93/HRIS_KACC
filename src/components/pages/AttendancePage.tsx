@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../lib/auth';
 import { useToast } from '../ui/Toast';
 import { haversineDistance, STATUS_COLORS, createNotification } from '../../lib/utils';
+import { getCurrentPosition } from '../../lib/location';
 import type { Attendance, Employee, Outlet, ShiftTemplate } from '../../lib/database.types';
 
 // ─── Webcam capture ────────────────────────────────────────
@@ -381,11 +382,9 @@ export function AttendancePage() {
   const getGPS = () => {
     setGpsLoading(true);
     setLocationError(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => { setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsLoading(false); },
-      () => { setLocationError('Unable to get GPS location. Please allow location access.'); setGpsLoading(false); },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
+    getCurrentPosition()
+      .then((pos) => { setLocation(pos); setGpsLoading(false); })
+      .catch(() => { setLocationError('Unable to get GPS location. Please allow location access.'); setGpsLoading(false); });
   };
 
   const computeAttendanceStatus = (checkInTime: Date, shift: ShiftTemplate | null): 'present' | 'late' => {

@@ -6,6 +6,7 @@ import { Badge } from '../ui/Badge';
 import { useAuth } from '../../lib/auth';
 import { supabase } from '../../lib/supabase';
 import { haversineDistance } from '../../lib/utils';
+import { getCurrentPosition } from '../../lib/location';
 import type { Employee, Outlet, ShiftTemplate } from '../../lib/database.types';
 import { findBestMatch } from '../../lib/faceMatch';
 import type { FaceProfile } from '../../lib/faceMatch';
@@ -35,11 +36,7 @@ function KioskPanel({ onBack }: { onBack: () => void }) {
 
   // GPS
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition(
-      (p) => setGps({ lat: p.coords.latitude, lng: p.coords.longitude }),
-      () => {},
-      { enableHighAccuracy: true },
-    );
+    getCurrentPosition().then((g) => setGps(g)).catch(() => {});
   }, []);
 
   // Auto-reset
