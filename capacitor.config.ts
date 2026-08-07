@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
- * Capacitor configuration — wraps the SmartHRIS web app (dist/) into a
+ * Capacitor configuration — wraps the KACC HRIS web app (dist/) into a
  * native Android/iOS application for employees.
  *
  * Local workflow:
@@ -12,7 +12,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
  */
 const config: CapacitorConfig = {
   appId: 'id.kacc.smarthris',
-  appName: 'SmartHRIS Karyawan',
+  appName: 'KACC HRIS',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

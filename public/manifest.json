@@ -1,11 +1,11 @@
 {
-  "name": "SmartHRIS",
-  "short_name": "SmartHRIS",
+  "name": "KACC HRIS",
+  "short_name": "KACC HRIS",
   "description": "Enterprise Workforce Management Platform",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
-  "theme_color": "#1e3a8a",
+  "theme_color": "#681c33",
   "orientation": "any",
   "icons": [
     {

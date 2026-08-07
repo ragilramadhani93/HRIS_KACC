@@ -1,5 +1,5 @@
 /**
- * SmartHRIS database client.
+ * KACC HRIS database client.
  *
  * The app previously depended on Supabase (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY).
  * It now uses a built-in, browser-local database (see ./localDb.ts) that exposes

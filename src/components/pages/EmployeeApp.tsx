@@ -132,7 +132,7 @@ function FaceLogin({ candidates, onLogin, onExit }: {
             <ScanFace size={24} className="text-white" />
           </div>
           <div>
-            <h1 className="text-white text-lg font-bold leading-tight">SmartHRIS Karyawan</h1>
+            <h1 className="text-white text-lg font-bold leading-tight">KACC HRIS</h1>
             <p className="text-blue-100 text-xs mt-0.5">Masuk otomatis dengan pengenalan wajah</p>
           </div>
         </div>

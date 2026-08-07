@@ -24,16 +24,17 @@
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
 
     /* Brand colors as CSS variables */
-    --brand-50: #eff6ff;
-    --brand-100: #dbeafe;
-    --brand-200: #bfdbfe;
-    --brand-300: #93c5fd;
-    --brand-400: #60a5fa;
-    --brand-500: #3b82f6;
-    --brand-600: #2563eb;
-    --brand-700: #1d4ed8;
-    --brand-800: #1e40af;
-    --brand-900: #1e3a8a;
+    --brand-50: #fdf3f4;
+    --brand-100: #fbe5e8;
+    --brand-200: #f6d0d6;
+    --brand-300: #eeaab5;
+    --brand-400: #e2798c;
+    --brand-500: #d24f68;
+    --brand-600: #b32c47;
+    --brand-700: #92203c;
+    --brand-800: #7a1d38;
+    --brand-900: #681c33;
+    --brand-950: #3a0e1b;
 
     /* Shadows */
     --shadow-xs: 0 0 0 1px rgb(0 0 0 / 0.03);
@@ -82,8 +83,8 @@
 
   /* Selection style */
   ::selection {
-    background: rgb(219 234 254);
-    color: rgb(30 64 175);
+    background: rgb(238 170 181);
+    color: rgb(122 29 56);
   }
 }
 

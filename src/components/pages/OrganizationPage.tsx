@@ -20,7 +20,7 @@ function CompaniesTab() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Company | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', address: '', phone: '', email: '' });
+  const [form, setForm] = useState({ name: '', code: '', address: '', phone: '', email: '', is_active: true });
 
   const load = async () => {
     setLoading(true);
@@ -31,8 +31,14 @@ function CompaniesTab() {
 
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => { setEditing(null); setForm({ name: '', code: '', address: '', phone: '', email: '' }); setModalOpen(true); };
-  const openEdit = (c: Company) => { setEditing(c); setForm({ name: c.name, code: c.code, address: c.address ?? '', phone: c.phone ?? '', email: c.email ?? '' }); setModalOpen(true); };
+  const openCreate = () => { setEditing(null); setForm({ name: '', code: '', address: '', phone: '', email: '', is_active: true }); setModalOpen(true); };
+  const openEdit = (c: Company) => { setEditing(c); setForm({ name: c.name, code: c.code, address: c.address ?? '', phone: c.phone ?? '', email: c.email ?? '', is_active: c.is_active }); setModalOpen(true); };
+
+  const toggleStatus = async (c: Company) => {
+    const next = !c.is_active;
+    const { error } = await supabase.from('companies').update({ is_active: next }).eq('id', c.id);
+    if (error) { toast('error', 'Failed to update status', error.message); } else { toast('success', next ? 'Company activated' : 'Company deactivated'); load(); }
+  };
 
   const handleSave = async () => {
     if (!form.name || !form.code) return toast('error', 'Name and Code are required');
@@ -70,7 +76,11 @@ function CompaniesTab() {
           { key: 'name', header: 'Name', render: (r) => <span className="font-medium">{r.name}</span> },
           { key: 'email', header: 'Email', render: (r) => r.email ?? '-' },
           { key: 'phone', header: 'Phone', render: (r) => r.phone ?? '-' },
-          { key: 'is_active', header: 'Status', render: (r) => <Badge className={r.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{r.is_active ? 'Active' : 'Inactive'}</Badge> },
+          { key: 'is_active', header: 'Status', render: (r) => (
+            <button type="button" onClick={() => toggleStatus(r)} title="Click to toggle status" className="cursor-pointer transition-transform active:scale-95">
+              <Badge className={r.is_active ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}>{r.is_active ? 'Active' : 'Inactive'}</Badge>
+            </button>
+          ) },
           { key: 'created_at', header: 'Created', render: (r) => formatDate(r.created_at) },
           { key: 'actions', header: '', render: (r) => (
             <div className="flex gap-1 justify-end">
@@ -91,6 +101,19 @@ function CompaniesTab() {
           <Input label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
           <Textarea label="Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <div>
+            <p className="block text-xs font-medium text-slate-500 mb-1.5">Status</p>
+            <div className="inline-flex items-center gap-1 rounded-xl border border-slate-200 p-1 bg-slate-50">
+              <button type="button" onClick={() => setForm({ ...form, is_active: true })}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${form.is_active ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
+                Active
+              </button>
+              <button type="button" onClick={() => setForm({ ...form, is_active: false })}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors ${!form.is_active ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>
+                Inactive
+              </button>
+            </div>
+          </div>
         </div>
       </Modal>
     </>

@@ -261,7 +261,7 @@ export function KioskPage() {
             <GitBranch size={24} className="text-white" />
           </div>
           <div>
-            <p className="text-white font-bold text-xl">SmartHRIS Kiosk</p>
+            <p className="text-white font-bold text-xl">KACC HRIS Kiosk</p>
             <p className="text-blue-300 text-sm">Sistem Absensi Wajah</p>
           </div>
         </div>
@@ -298,7 +298,7 @@ export function KioskPage() {
             <GitBranch size={20} className="text-white" />
           </div>
           <div>
-            <p className="text-white font-bold">SmartHRIS Kiosk</p>
+            <p className="text-white font-bold">KACC HRIS Kiosk</p>
             <p className="text-blue-300 text-xs flex items-center gap-1">
               <MapPin size={10} /> {selectedOutlet.name}
             </p>
@@ -456,7 +456,7 @@ export function KioskPage() {
 
       {/* Footer */}
       <div className="text-center pb-4">
-        <p className="text-slate-600 text-xs">SmartHRIS Kiosk · {selectedOutlet.name}</p>
+        <p className="text-slate-600 text-xs">KACC HRIS Kiosk · {selectedOutlet.name}</p>
       </div>
     </div>
   );

@@ -133,7 +133,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="text-white font-bold text-sm leading-tight">SmartHRIS</p>
+            <p className="text-white font-bold text-sm leading-tight">KACC HRIS</p>
             <p className="text-blue-300 text-xs">Workforce Platform</p>
           </div>
         )}

@@ -390,7 +390,7 @@ export function AuthPage({ onEmployeeMode }: { onEmployeeMode?: () => void }) {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 mb-4 shadow-lg shadow-blue-500/25">
             <GitBranch size={30} className="text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">SmartHRIS</h1>
+          <h1 className="text-3xl font-bold text-white tracking-tight">KACC HRIS</h1>
           <p className="text-slate-400 mt-1 text-sm">Enterprise Workforce Management</p>
         </div>
 
@@ -495,7 +495,7 @@ export function AuthPage({ onEmployeeMode }: { onEmployeeMode?: () => void }) {
         )}
 
         <p className="text-center text-slate-500/60 text-xs mt-6">
-          &copy; 2026 SmartHRIS. All rights reserved.
+          &copy; 2026 KACC HRIS. All rights reserved.
         </p>
       </div>
     </div>

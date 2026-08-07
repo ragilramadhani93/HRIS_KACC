@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
- * SmartHRIS Local Database
+ * KACC HRIS Local Database
  * ----------------------------------------------------------------------------
  * A self-contained, browser-first database that replaces Supabase entirely.
  *
@@ -89,7 +89,7 @@ function dbRef(): DbShape {
     if (!dbCache) {
       dbCache = buildSeed();
       persistDb();
-      console.info('[SmartHRIS] Local database initialized with demo data. Login: admin@kacc.id / admin123');
+      console.info('[KACC HRIS] Local database initialized with demo data. Login: admin@kacc.id / admin123');
     }
   }
   return dbCache;
@@ -575,7 +575,7 @@ function buildSeed(): DbShape {
 
     notifications: [
       {
-        id: 'n1', user_id: 'u-admin', type: 'system', title: 'Selamat datang di SmartHRIS',
+        id: 'n1', user_id: 'u-admin', type: 'system', title: 'Selamat datang di KACC HRIS',
         message: 'Akun admin berhasil dibuat. Mulai kelola data karyawan dari menu Karyawan.',
         is_read: false, reference_id: null, reference_table: null, created_at: iso(ago(1)),
       },
