@@ -186,6 +186,13 @@ export function CameraOverlay({ emp, outlet, onClose, onDone }: {
         check_in_selfie_url: photoUrl,
         check_in_face_score: faceScore != null ? parseFloat(faceScore.toFixed(2)) : null,
         status,
+        // Re-open: clear any previous check-out so a new session can start (re-check-in).
+        check_out_time: null,
+        check_out_lat: null,
+        check_out_lng: null,
+        check_out_geofence: null,
+        check_out_selfie_url: null,
+        work_duration_minutes: null,
       }, { onConflict: 'employee_id,attendance_date' });
 
       if (error) { setMsg(`Check-in gagal: ${error.message}`); setState('error'); }
@@ -683,7 +690,19 @@ export function AbsenTab({ emp, outlet, onOutletChange, onOpenCamera, onRefreshK
         </div>
 
         {/* Big action button */}
-        {!checkedOut && (
+        {checkedOut ? (
+          <>
+            <button
+              onClick={onOpenCamera}
+              className="w-full rounded-2xl py-4 font-bold text-white text-base bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-200 active:scale-[0.98] transition-all shadow-lg"
+            >
+              <LogIn size={18} className="inline mr-2 align-middle" />Clock In Lagi
+            </button>
+            <p className="text-center text-[11px] text-slate-400 font-medium mt-2 flex items-center justify-center gap-1">
+              <RefreshCw size={11} /> Shift sudah selesai — klik untuk check-in sesi baru
+            </p>
+          </>
+        ) : (
           <button
             onClick={onOpenCamera}
             className={`w-full rounded-2xl py-4 font-bold text-white text-base active:scale-[0.98] transition-all shadow-lg ${
@@ -694,11 +713,6 @@ export function AbsenTab({ emp, outlet, onOutletChange, onOpenCamera, onRefreshK
           >
             {checkedIn ? <><LogOut size={18} className="inline mr-2 align-middle" />Clock Out Sekarang</> : <><LogIn size={18} className="inline mr-2 align-middle" />Clock In Sekarang</>}
           </button>
-        )}
-        {checkedOut && (
-          <div className="w-full rounded-2xl bg-emerald-50 border border-emerald-100 py-3.5 text-center text-emerald-700 text-sm font-semibold flex items-center justify-center gap-2">
-            <CheckCircle size={16} /> Shift selesai — sampai jumpa!
-          </div>
         )}
         {emp.face_registered ? (
           <p className="text-center text-[11px] text-emerald-600 font-medium mt-3 flex items-center justify-center gap-1">
