@@ -257,7 +257,7 @@ export function KioskPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col items-center justify-center p-8">
         <div className="flex items-center gap-3 mb-8">
-          <img src="/kapal-api-logo.svg" alt="Kapal Api" className="h-12 w-auto" />
+          <img src="/kapal-api-logo.png" alt="Kapal Api" className="h-12 w-auto" />
           <div>
             <p className="text-white font-bold text-xl">Kapal Api Coffee Corner</p>
             <p className="text-blue-300 text-sm">Sistem Absensi Wajah</p>
@@ -292,7 +292,7 @@ export function KioskPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-8 py-4">
         <div className="flex items-center gap-3">
-          <img src="/kapal-api-logo.svg" alt="Kapal Api" className="h-10 w-auto" />
+          <img src="/kapal-api-logo.png" alt="Kapal Api" className="h-10 w-auto" />
           <div>
             <p className="text-white font-bold">Kapal Api Coffee Corner</p>
             <p className="text-blue-300 text-xs flex items-center gap-1">

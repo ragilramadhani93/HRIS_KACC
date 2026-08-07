@@ -388,7 +388,7 @@ export function AuthPage({ onEmployeeMode }: { onEmployeeMode?: () => void }) {
         {/* Logo */}
         <div className="text-center mb-8">
           <div className="mb-4">
-            <img src="/kapal-api-logo.svg" alt="Kapal Api Coffee Corner" className="h-24 w-auto mx-auto drop-shadow-lg" />
+            <img src="/kapal-api-logo.png" alt="Kapal Api Coffee Corner" className="h-24 w-auto mx-auto drop-shadow-lg" />
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Kapal Api Coffee Corner</h1>
           <p className="text-slate-400 mt-1 text-sm">Enterprise Workforce Management</p>

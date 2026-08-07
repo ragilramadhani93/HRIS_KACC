@@ -129,7 +129,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
       {/* Logo */}
       <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-white/10', collapsed && 'justify-center px-2')}>
         <div className="flex-shrink-0">
-          <img src="/kapal-api-logo.svg" alt="Kapal Api" className={`${collapsed ? 'w-8 h-8' : 'h-8 w-auto'}`} />
+          <img src="/kapal-api-logo.png" alt="Kapal Api" className={`${collapsed ? 'w-8 h-8' : 'h-8 w-auto'}`} />
         </div>
         {!collapsed && (
           <div className="min-w-0">
