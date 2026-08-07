@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 340" fill="none">
+  <defs>
+    <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#c9a84c"/>
+      <stop offset="50%" stop-color="#e8d48b"/>
+      <stop offset="100%" stop-color="#a07830"/>
+    </linearGradient>
+    <linearGradient id="darkGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b8942e"/>
+      <stop offset="100%" stop-color="#7a5f1a"/>
+    </linearGradient>
+    <linearGradient id="shipBody" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a1a2e"/>
+      <stop offset="100%" stop-color="#0d0d1a"/>
+    </linearGradient>
+    <linearGradient id="redGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#c0392b"/>
+      <stop offset="50%" stop-color="#e74c3c"/>
+      <stop offset="100%" stop-color="#c0392b"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Outer circle - gold border -->
+  <circle cx="160" cy="120" r="100" fill="none" stroke="url(#goldGrad)" stroke-width="5"/>
+  <circle cx="160" cy="120" r="92" fill="none" stroke="url(#darkGold)" stroke-width="2"/>
+
+  <!-- Inner circle background -->
+  <circle cx="160" cy="120" r="88" fill="#f5e6c8" opacity="0.15"/>
+
+  <!-- Water waves -->
+  <path d="M75 145 Q95 138, 115 145 Q135 152, 155 145 Q175 138, 195 145 Q215 152, 235 145 Q255 138, 275 145" stroke="#3a6ea5" stroke-width="2.5" fill="none" opacity="0.6"/>
+  <path d="M80 152 Q100 145, 120 152 Q140 159, 160 152 Q180 145, 200 152 Q220 159, 240 152 Q260 145, 270 152" stroke="#3a6ea5" stroke-width="2" fill="none" opacity="0.4"/>
+
+  <!-- Ship hull -->
+  <path d="M120 140 L125 118 L195 118 L200 140 Z" fill="url(#shipBody)" stroke="#2c3e50" stroke-width="1"/>
+  <!-- Hull detail line -->
+  <line x1="128" y1="135" x2="192" y2="135" stroke="#4a6a8a" stroke-width="1" opacity="0.5"/>
+
+  <!-- Red stripe on hull -->
+  <path d="M123 130 L126 122 L194 122 L197 130 Z" fill="url(#redGrad)" opacity="0.8"/>
+
+  <!-- Mast -->
+  <line x1="160" y1="118" x2="160" y2="55" stroke="#2c3e50" stroke-width="3"/>
+  <!-- Crow's nest / top -->
+  <rect x="155" y="52" width="10" height="5" rx="2" fill="#2c3e50"/>
+
+  <!-- Main sail (front) -->
+  <path d="M162 60 L192 85 L162 115 Z" fill="#f0e6d2" stroke="#d4c4a8" stroke-width="1" opacity="0.9"/>
+  <!-- Sail lines -->
+  <line x1="162" y1="72" x2="183" y2="85" stroke="#d4c4a8" stroke-width="0.8" opacity="0.6"/>
+  <line x1="162" y1="88" x2="188" y2="95" stroke="#d4c4a8" stroke-width="0.8" opacity="0.6"/>
+  <line x1="162" y1="100" x2="191" y2="105" stroke="#d4c4a8" stroke-width="0.8" opacity="0.6"/>
+
+  <!-- Back sail -->
+  <path d="M158 65 L128 85 L158 115 Z" fill="#e8dcc6" stroke="#d4c4a8" stroke-width="1" opacity="0.85"/>
+  <!-- Sail lines -->
+  <line x1="158" y1="78" x2="137" y2="85" stroke="#d4c4a8" stroke-width="0.8" opacity="0.6"/>
+  <line x1="158" y1="92" x2="133" y2="95" stroke="#d4c4a8" stroke-width="0.8" opacity="0.6"/>
+  <line x1="158" y1="104" x2="130" y2="105" stroke="#d4c4a8" stroke-width="0.8" opacity="0.6"/>
+
+  <!-- Flag on top -->
+  <path d="M160 52 L175 47 L160 42" fill="#e74c3c" opacity="0.9"/>
+
+  <!-- Bowsprit (front pole) -->
+  <line x1="125" y1="118" x2="105" y2="105" stroke="#2c3e50" stroke-width="2"/>
+
+  <!-- ─── "Kapal Api" cursive text ─── -->
+  <g filter="url(#glow)">
+    <!-- K -->
+    <text x="55" y="210" font-family="Georgia, 'Times New Roman', serif" font-size="52" font-style="italic" font-weight="bold" fill="#c0392b" letter-spacing="-1">K</text>
+    <!-- apal -->
+    <text x="82" y="210" font-family="Georgia, 'Times New Roman', serif" font-size="52" font-style="italic" font-weight="bold" fill="#c0392b" letter-spacing="-1">apal</text>
+    <!-- Api -->
+    <text x="185" y="210" font-family="Georgia, 'Times New Roman', serif" font-size="52" font-style="italic" font-weight="bold" fill="#c0392b" letter-spacing="-1">Api</text>
+  </g>
+
+  <!-- Red swoosh underline -->
+  <path d="M60 222 Q100 232, 160 228 Q220 224, 280 218" stroke="url(#redGrad)" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+  <path d="M70 228 Q120 238, 170 234 Q220 230, 265 224" stroke="#c0392b" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+  <!-- "Coffee Corner" text -->
+  <text x="160" y="265" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="26" font-weight="bold" fill="#b8860b" letter-spacing="2">Coffee Corner</text>
+  <text x="160" y="265" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="26" font-weight="bold" fill="#d4a843" letter-spacing="2" opacity="0.3" dx="1" dy="-1">Coffee Corner</text>
+
+  <!-- Decorative dots -->
+  <circle cx="88" cy="272" r="2" fill="#b8860b" opacity="0.6"/>
+  <line x1="94" y1="272" x2="226" y2="272" stroke="#b8860b" stroke-width="0.8" opacity="0.3"/>
+  <circle cx="232" cy="272" r="2" fill="#b8860b" opacity="0.6"/>
+</svg>

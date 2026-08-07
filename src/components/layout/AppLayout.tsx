@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   LayoutDashboard, Users, Clock, Calendar,
-  Building2, GitBranch, Bell, ChevronLeft, ChevronRight, LogOut,
+  Building2, Bell, ChevronLeft, ChevronRight, LogOut,
   UserCircle, Shield, Briefcase, BarChart3, Menu, X, Receipt, DollarSign, Monitor, Smartphone,
 } from 'lucide-react';
 import { cn, ROLE_LABELS, getInitials } from '../../lib/utils';
@@ -128,13 +128,13 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className={cn('flex items-center gap-3 px-4 py-5 border-b border-white/10', collapsed && 'justify-center px-2')}>
-        <div className="w-8 h-8 rounded-lg bg-blue-400 flex items-center justify-center flex-shrink-0">
-          <GitBranch size={16} className="text-white" />
+        <div className="flex-shrink-0">
+          <img src="/kapal-api-logo.svg" alt="Kapal Api" className={`${collapsed ? 'w-8 h-8' : 'h-8 w-auto'}`} />
         </div>
         {!collapsed && (
           <div className="min-w-0">
-            <p className="text-white font-bold text-sm leading-tight">KACC HRIS</p>
-            <p className="text-blue-300 text-xs">Workforce Platform</p>
+            <p className="text-white font-bold text-sm leading-tight">Kapal Api</p>
+            <p className="text-blue-300 text-xs">Coffee Corner</p>
           </div>
         )}
       </div>

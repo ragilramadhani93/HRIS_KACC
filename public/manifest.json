@@ -1,6 +1,6 @@
 {
-  "name": "KACC HRIS",
-  "short_name": "KACC HRIS",
+  "name": "Kapal Api Coffee Corner",
+  "short_name": "Kapal Api",
   "description": "Enterprise Workforce Management Platform",
   "start_url": "/",
   "display": "standalone",
@@ -9,7 +9,7 @@
   "orientation": "any",
   "icons": [
     {
-      "src": "/vite.svg",
+      "src": "/kapal-api-logo.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }

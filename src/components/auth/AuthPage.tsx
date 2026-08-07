@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { GitBranch, Eye, EyeOff, Mail, Lock, Camera, CheckCircle, XCircle, RefreshCw, User, LogIn, LogOut, ChevronLeft, ChevronRight, Smartphone } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, Camera, CheckCircle, XCircle, RefreshCw, User, LogIn, LogOut, ChevronLeft, ChevronRight, Smartphone } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Badge } from '../ui/Badge';
@@ -387,10 +387,10 @@ export function AuthPage({ onEmployeeMode }: { onEmployeeMode?: () => void }) {
       <div className="relative w-full max-w-sm animate-fade-in">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 mb-4 shadow-lg shadow-blue-500/25">
-            <GitBranch size={30} className="text-white" />
+          <div className="mb-4">
+            <img src="/kapal-api-logo.svg" alt="Kapal Api Coffee Corner" className="h-24 w-auto mx-auto drop-shadow-lg" />
           </div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">KACC HRIS</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Kapal Api Coffee Corner</h1>
           <p className="text-slate-400 mt-1 text-sm">Enterprise Workforce Management</p>
         </div>
 
@@ -495,7 +495,7 @@ export function AuthPage({ onEmployeeMode }: { onEmployeeMode?: () => void }) {
         )}
 
         <p className="text-center text-slate-500/60 text-xs mt-6">
-          &copy; 2026 KACC HRIS. All rights reserved.
+          &copy; 2026 Kapal Api Coffee Corner. All rights reserved.
         </p>
       </div>
     </div>

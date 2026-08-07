@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, CheckCircle, XCircle, MapPin, RefreshCw, GitBranch, User, LogIn, LogOut } from 'lucide-react';
+import { Camera, CheckCircle, XCircle, MapPin, RefreshCw, User, LogIn, LogOut } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { haversineDistance, STATUS_COLORS } from '../../lib/utils';
 import { Badge } from '../ui/Badge';
@@ -257,11 +257,9 @@ export function KioskPage() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 flex flex-col items-center justify-center p-8">
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center">
-            <GitBranch size={24} className="text-white" />
-          </div>
+          <img src="/kapal-api-logo.svg" alt="Kapal Api" className="h-12 w-auto" />
           <div>
-            <p className="text-white font-bold text-xl">KACC HRIS Kiosk</p>
+            <p className="text-white font-bold text-xl">Kapal Api Coffee Corner</p>
             <p className="text-blue-300 text-sm">Sistem Absensi Wajah</p>
           </div>
         </div>
@@ -294,11 +292,9 @@ export function KioskPage() {
       {/* Header */}
       <div className="flex items-center justify-between px-8 py-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center">
-            <GitBranch size={20} className="text-white" />
-          </div>
+          <img src="/kapal-api-logo.svg" alt="Kapal Api" className="h-10 w-auto" />
           <div>
-            <p className="text-white font-bold">KACC HRIS Kiosk</p>
+            <p className="text-white font-bold">Kapal Api Coffee Corner</p>
             <p className="text-blue-300 text-xs flex items-center gap-1">
               <MapPin size={10} /> {selectedOutlet.name}
             </p>
@@ -456,7 +452,7 @@ export function KioskPage() {
 
       {/* Footer */}
       <div className="text-center pb-4">
-        <p className="text-slate-600 text-xs">KACC HRIS Kiosk · {selectedOutlet.name}</p>
+        <p className="text-slate-600 text-xs">Kapal Api Coffee Corner · {selectedOutlet.name}</p>
       </div>
     </div>
   );
