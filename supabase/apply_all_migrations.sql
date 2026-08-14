@@ -979,14 +979,14 @@ DO $$
 DECLARE b text;
 BEGIN
   FOREACH b IN ARRAY ARRAY['attendance-photos', 'face-photos', 'employee-documents'] LOOP
-    EXECUTE format('DROP POLICY IF EXISTS "public_read_%I" ON storage.objects', b);
-    EXECUTE format('CREATE POLICY "public_read_%I" ON storage.objects FOR SELECT USING (bucket_id = %L)', b, b);
-    EXECUTE format('DROP POLICY IF EXISTS "auth_upload_%I" ON storage.objects', b);
-    EXECUTE format('CREATE POLICY "auth_upload_%I" ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = %L)', b, b);
-    EXECUTE format('DROP POLICY IF EXISTS "auth_update_%I" ON storage.objects', b);
-    EXECUTE format('CREATE POLICY "auth_update_%I" ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = %L) WITH CHECK (bucket_id = %L)', b, b, b);
-    EXECUTE format('DROP POLICY IF EXISTS "auth_delete_%I" ON storage.objects', b);
-    EXECUTE format('CREATE POLICY "auth_delete_%I" ON storage.objects FOR DELETE TO authenticated USING (bucket_id = %L)', b, b);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', 'public_read_' || b);
+    EXECUTE format('CREATE POLICY %I ON storage.objects FOR SELECT USING (bucket_id = %L)', 'public_read_' || b, b);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', 'auth_upload_' || b);
+    EXECUTE format('CREATE POLICY %I ON storage.objects FOR INSERT TO authenticated WITH CHECK (bucket_id = %L)', 'auth_upload_' || b, b);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', 'auth_update_' || b);
+    EXECUTE format('CREATE POLICY %I ON storage.objects FOR UPDATE TO authenticated USING (bucket_id = %L) WITH CHECK (bucket_id = %L)', 'auth_update_' || b, b, b);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects', 'auth_delete_' || b);
+    EXECUTE format('CREATE POLICY %I ON storage.objects FOR DELETE TO authenticated USING (bucket_id = %L)', 'auth_delete_' || b, b);
   END LOOP;
 END $$;
 
