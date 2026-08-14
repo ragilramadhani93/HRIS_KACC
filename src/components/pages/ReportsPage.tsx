@@ -6,7 +6,7 @@ import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { supabase } from '../../lib/supabase';
-import { formatCurrency, MONTH_NAMES, STATUS_COLORS } from '../../lib/utils';
+import { formatCurrency, MONTH_NAMES, STATUS_COLORS, haversineDistance } from '../../lib/utils';
 
 // ─── Mini bar chart ────────────────────────────────────────────
 function MiniBar({ value, max, color = 'bg-blue-500', label }: { value: number; max: number; color?: string; label?: string }) {
@@ -201,7 +201,7 @@ function PayrollReportTab({ companyId, year, month }: { companyId: string; year:
         'Kode': emp?.employee_code, 'Nama': emp?.full_name, 'Jabatan': emp?.job_title,
         'Departemen': emp?.department, 'Outlet': emp?.primary_outlet?.name,
         'Skema Gaji': emp?.salary_scheme === 'daily' ? 'Harian' : 'Bulanan',
-        'Tarif': emp?.salary_scheme === 'daily' ? emp?.daily_rate : emp?.basic_salary,
+        'Tarif': emp?.salary_scheme === 'daily' ? i.basic_salary : emp?.basic_salary,
         'Hari Kerja': i.work_days, 'Hari Hadir': i.present_days, 'Terlambat': i.late_days,
         'Absen': i.absent_days, 'Jam Lembur': i.overtime_hours,
         'Gaji Pokok/Harian': empLines.find((l: any) => l.component_name?.startsWith('Gaji'))?.amount ?? 0,
@@ -304,7 +304,7 @@ function PayrollReportTab({ companyId, year, month }: { companyId: string; year:
                         {isDaily ? 'Harian' : 'Bulanan'}
                       </Badge>
                       <p className="text-xs text-slate-400 mt-1">
-                        {isDaily ? `${formatCurrency(emp?.daily_rate)}/hari` : formatCurrency(emp?.basic_salary)}
+                        {isDaily ? `${formatCurrency(i.basic_salary)}/hari (Tarif Area)` : formatCurrency(emp?.basic_salary)}
                       </p>
                     </td>
                     <td className="px-4 py-3">
@@ -339,6 +339,8 @@ function AttendanceReportTab({ companyId, year, month }: { companyId: string; ye
   const [search, setSearch] = useState('');
   const [filterOutlet, setFilterOutlet] = useState('');
   const [outlets, setOutlets] = useState<{ id: string; name: string }[]>([]);
+  const [rates, setRates] = useState<any[]>([]);
+  const [geoOutlets, setGeoOutlets] = useState<any[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const periodStart = `${year}-${String(month).padStart(2, '0')}-01`;
@@ -348,13 +350,17 @@ function AttendanceReportTab({ companyId, year, month }: { companyId: string; ye
     if (!companyId) return;
     setLoading(true);
     Promise.all([
-      supabase.from('employees').select('id, full_name, employee_code, job_title, department, salary_scheme, daily_rate, basic_salary, primary_outlet:outlets!primary_outlet_id(id, name)').eq('company_id', companyId).eq('status', 'active').order('full_name'),
-      supabase.from('attendance').select('employee_id, attendance_date, check_in_time, check_out_time, status, work_duration_minutes, check_in_geofence').gte('attendance_date', periodStart).lte('attendance_date', periodEnd).in('employee_id', supabase.from('employees').select('id').eq('company_id', companyId) as any),
+      supabase.from('employees').select('id, area_id, full_name, employee_code, job_title, department, salary_scheme, daily_rate, basic_salary, primary_outlet:outlets!primary_outlet_id(id, name)').eq('company_id', companyId).eq('status', 'active').order('full_name'),
+      supabase.from('attendance').select('employee_id, attendance_date, check_in_time, check_out_time, status, work_duration_minutes, check_in_geofence, check_in_lat, check_in_lng, check_out_lat, check_out_lng').gte('attendance_date', periodStart).lte('attendance_date', periodEnd).in('employee_id', supabase.from('employees').select('id').eq('company_id', companyId) as any),
       supabase.from('outlets').select('id, name').eq('is_active', true).order('name'),
-    ]).then(([{ data: emps }, { data: att }, { data: outs }]) => {
+      supabase.from('area_salary_rates').select('*, area:areas(id)').eq('is_active', true),
+      supabase.from('outlets').select('id, name, latitude, longitude, geofence_radius_meters'),
+    ]).then(([{ data: emps }, { data: att }, { data: outs }, { data: rates }, { data: geoOutlets }]) => {
       setEmployees(emps ?? []);
       setAttendance(att ?? []);
       setOutlets(outs ?? []);
+      setRates(rates ?? []);
+      setGeoOutlets(geoOutlets ?? []);
       setLoading(false);
     });
   }, [companyId, year, month]);
@@ -399,6 +405,8 @@ function AttendanceReportTab({ companyId, year, month }: { companyId: string; ye
           'Terlambat': '',
           'Absen': '',
           'Di Luar Geofence': a.check_in_geofence,
+          'Lokasi Masuk': locExport(a.check_in_lat, a.check_in_lng),
+          'Lokasi Keluar': locExport(a.check_out_lat, a.check_out_lng),
           'Total Jam Kerja': '',
           'Rata-rata Jam/Hari': '',
         });
@@ -417,6 +425,66 @@ function AttendanceReportTab({ companyId, year, month }: { companyId: string; ye
     if (search && !e.full_name.toLowerCase().includes(search.toLowerCase()) && !e.employee_code.includes(search)) return false;
     return true;
   });
+
+  // Tarif harian efektif: mengikuti Tarif Area (area + jabatan), fallback ke tarif lama karyawan
+  const effectiveRate = (emp: any) => {
+    const matches = (rates ?? []).filter((r: any) => {
+      const areaId = (r.area as { id?: string })?.id;
+      return areaId === emp.area_id && (!r.job_title || r.job_title === emp.job_title);
+    });
+    if (matches.length > 0) {
+      return matches.find((r: any) => r.job_title === emp.job_title)?.daily_rate ?? matches[0].daily_rate;
+    }
+    return emp.daily_rate ?? 0;
+  };
+
+  // Format koordinat lokasi (lat/lng) untuk tampilan & export
+  const fmtCoord = (v: any) => (v === null || v === undefined || v === '' ? null : Number(v).toFixed(6));
+  const coordText = (lat: any, lng: any) => (fmtCoord(lat) && fmtCoord(lng) ? `${fmtCoord(lat)}, ${fmtCoord(lng)}` : '');
+
+  // Petakan koordinat ke outlet: prioritas outlet yang radius-nya mencakup titik, fallback ke outlet terdekat
+  const locationInfo = (lat: any, lng: any) => {
+    if (!fmtCoord(lat) || !fmtCoord(lng)) return null;
+    const latN = Number(lat), lngN = Number(lng);
+    const ranked = (geoOutlets ?? [])
+      .filter((o: any) => o.latitude != null && o.longitude != null)
+      .map((o: any) => ({
+        outlet: o,
+        dist: haversineDistance(latN, lngN, Number(o.latitude), Number(o.longitude)),
+      }))
+      .sort((a: any, b: any) => a.dist - b.dist);
+    if (!ranked.length) return null;
+    const inside = ranked.find((r: any) => r.dist <= (r.outlet.geofence_radius_meters ?? 300));
+    const nearest = inside ?? ranked[0];
+    return { outlet: nearest.outlet, dist: nearest.dist, inside: !!inside };
+  };
+
+  const locExport = (lat: any, lng: any) => {
+    const loc = locationInfo(lat, lng);
+    const coords = coordText(lat, lng);
+    const base = loc ? (loc.inside ? loc.outlet.name : `${loc.outlet.name} (≈${Math.round(loc.dist)}m)`) : '';
+    return [base, coords].filter(Boolean).join(' - ');
+  };
+
+  const LocationCell = (lat: any, lng: any) => {
+    const loc = locationInfo(lat, lng);
+    if (!loc) return <span className="text-slate-300">-</span>;
+    return (
+      <span className="flex flex-col gap-0.5 min-w-0">
+        <span className={`text-[11px] font-medium truncate ${loc.inside ? 'text-emerald-700' : 'text-amber-700'}`}>
+          {loc.outlet.name}{!loc.inside && ` · ≈${Math.round(loc.dist)}m`}
+        </span>
+        <a
+          href={`https://www.google.com/maps?q=${fmtCoord(lat)},${fmtCoord(lng)}`}
+          target="_blank" rel="noreferrer"
+          className="font-mono text-blue-600 hover:underline text-[10px] truncate"
+          title="Buka di Google Maps"
+        >
+          {fmtCoord(lat)}, {fmtCoord(lng)}
+        </a>
+      </span>
+    );
+  };
 
   return (
     <div className="space-y-4">
@@ -476,7 +544,7 @@ function AttendanceReportTab({ companyId, year, month }: { companyId: string; ye
                     <td className="px-4 py-3 text-xs text-slate-600">{emp.primary_outlet?.name ?? '-'}</td>
                     <td className="px-4 py-3">
                       <Badge className={emp.salary_scheme === 'daily' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}>
-                        {emp.salary_scheme === 'daily' ? `Harian ${formatCurrency(emp.daily_rate)}` : 'Bulanan'}
+                        {emp.salary_scheme === 'daily' ? `Harian ${formatCurrency(effectiveRate(emp))}` : 'Bulanan'}
                       </Badge>
                     </td>
                     <td className="px-4 py-3">
@@ -512,18 +580,19 @@ function AttendanceReportTab({ companyId, year, month }: { companyId: string; ye
                     <tr>
                       <td colSpan={9} className="px-8 pb-3 bg-blue-50">
                         <div className="bg-white rounded-xl border border-blue-100 overflow-hidden mt-1">
-                          <div className="grid grid-cols-8 text-xs font-semibold text-slate-500 px-4 py-2 border-b border-slate-100 bg-slate-50">
-                            <span>Tanggal</span><span>Masuk</span><span>Keluar</span><span>Durasi</span><span>Status</span><span>Geofence</span><span className="col-span-2">Catatan</span>
+                          <div className="grid grid-cols-9 text-xs font-semibold text-slate-500 px-4 py-2 border-b border-slate-100 bg-slate-50">
+                            <span>Tanggal</span><span>Masuk</span><span>Keluar</span><span>Durasi</span><span>Status</span><span>Geofence</span><span className="col-span-2">Lokasi Masuk</span><span className="col-span-2">Lokasi Keluar</span>
                           </div>
                           {empAtt.sort((a: any, b: any) => a.attendance_date < b.attendance_date ? -1 : 1).map((a: any) => (
-                            <div key={a.attendance_date} className="grid grid-cols-8 text-xs px-4 py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                            <div key={a.attendance_date} className="grid grid-cols-9 text-xs px-4 py-2 border-b border-slate-50 last:border-0 hover:bg-slate-50">
                               <span className="font-mono text-slate-600">{a.attendance_date}</span>
                               <span className="font-mono font-medium">{a.check_in_time ? new Date(a.check_in_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
                               <span className="font-mono text-slate-500">{a.check_out_time ? new Date(a.check_out_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) : '-'}</span>
                               <span>{a.work_duration_minutes ? `${Math.floor(a.work_duration_minutes / 60)}j ${a.work_duration_minutes % 60}m` : '-'}</span>
                               <span><Badge className={`${STATUS_COLORS[a.status]} text-[10px]`}>{a.status}</Badge></span>
                               <span className={a.check_in_geofence === 'outside' ? 'text-red-500 font-medium' : 'text-slate-400'}>{a.check_in_geofence ?? '-'}</span>
-                              <span className="col-span-2"></span>
+                              <span className="col-span-2">{LocationCell(a.check_in_lat, a.check_in_lng)}</span>
+                              <span className="col-span-2">{LocationCell(a.check_out_lat, a.check_out_lng)}</span>
                             </div>
                           ))}
                           {empAtt.length === 0 && <div className="text-center py-4 text-slate-400 text-xs">Tidak ada data</div>}
