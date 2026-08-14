@@ -26,6 +26,8 @@ export function CameraOverlay({ emp, outlet, onClose, onDone }: {
   const [faceScore, setFaceScore] = useState<number | null>(null);
   const [faceNote, setFaceNote] = useState<string>('');
   const [gps, setGps] = useState<{ lat: number; lng: number } | null>(null);
+  const [gpsState, setGpsState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  const [gpsError, setGpsError] = useState('');
   const [processing, setProcessing] = useState(false);
   const [msg, setMsg] = useState('');
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -34,9 +36,21 @@ export function CameraOverlay({ emp, outlet, onClose, onDone }: {
 
   const today = new Date().toISOString().split('T')[0];
 
-  useEffect(() => {
-    getCurrentPosition().then(setGps).catch(() => {});
+  // Request location on a user gesture so the browser shows its permission prompt.
+  const requestGps = useCallback(async () => {
+    setGpsState('loading');
+    setGpsError('');
+    try {
+      const pos = await getCurrentPosition(10000);
+      setGps(pos);
+      setGpsState('ok');
+    } catch {
+      setGpsState('error');
+      setGpsError('Izin lokasi ditolak atau GPS tidak tersedia. Ketuk untuk minta lagi.');
+    }
   }, []);
+
+  useEffect(() => { requestGps(); }, [requestGps]);
 
   const stopCamera = useCallback(() => {
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -46,6 +60,7 @@ export function CameraOverlay({ emp, outlet, onClose, onDone }: {
   useEffect(() => () => stopCamera(), [stopCamera]);
 
   const startCamera = async () => {
+    requestGps(); // request location while the user is tapping the camera button
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 } });
       streamRef.current = stream;
@@ -140,8 +155,14 @@ export function CameraOverlay({ emp, outlet, onClose, onDone }: {
   const confirmAction = async () => {
     setProcessing(true);
     const now = new Date();
-    const geofence = gps && outlet.latitude && outlet.longitude
-      ? haversineDistance(gps.lat, gps.lng, outlet.latitude!, outlet.longitude!) <= (outlet.geofence_radius_meters ?? 300)
+    // Last-chance location fetch right on the tap, so the browser/Android
+    // shows the permission prompt while the user has focus on the button.
+    let position = gps;
+    if (!position) {
+      try { position = await getCurrentPosition(5000); setGps(position); } catch { /* proceed without location */ }
+    }
+    const geofence = position && outlet.latitude && outlet.longitude
+      ? haversineDistance(position.lat, position.lng, outlet.latitude!, outlet.longitude!) <= (outlet.geofence_radius_meters ?? 300)
         ? 'inside' as const : 'outside' as const
       : 'unknown' as const;
 
@@ -177,8 +198,8 @@ export function CameraOverlay({ emp, outlet, onClose, onDone }: {
         shift_template_id: shift?.id ?? null,
         attendance_date: today,
         check_in_time: now.toISOString(),
-        check_in_lat: gps?.lat ?? null,
-        check_in_lng: gps?.lng ?? null,
+        check_in_lat: position?.lat ?? null,
+        check_in_lng: position?.lng ?? null,
         check_in_geofence: geofence,
         check_in_selfie_url: photoUrl,
         check_in_face_score: faceScore != null ? parseFloat(faceScore.toFixed(2)) : null,
@@ -202,8 +223,8 @@ export function CameraOverlay({ emp, outlet, onClose, onDone }: {
       const dur = row?.check_in_time ? Math.floor((now.getTime() - new Date(row.check_in_time).getTime()) / 60000) : 0;
       const { error } = await supabase.from('attendance').update({
         check_out_time: now.toISOString(),
-        check_out_lat: gps?.lat ?? null,
-        check_out_lng: gps?.lng ?? null,
+        check_out_lat: position?.lat ?? null,
+        check_out_lng: position?.lng ?? null,
         check_out_geofence: geofence,
         check_out_selfie_url: photoUrl,
         work_duration_minutes: dur,
@@ -253,7 +274,7 @@ export function CameraOverlay({ emp, outlet, onClose, onDone }: {
               <Camera size={22} /> Buka Kamera
             </button>
             <button
-              onClick={() => { setPhoto(null); setBlob(null); setFaceScore(null); setFaceNote('Absen manual tanpa foto'); setState('confirm'); }}
+              onClick={() => { requestGps(); setPhoto(null); setBlob(null); setFaceScore(null); setFaceNote('Absen manual tanpa foto'); setState('confirm'); }}
               className="text-slate-500 hover:text-slate-300 text-xs flex items-center gap-1.5"
             >
               <User size={13} /> Absen manual tanpa kamera
@@ -332,7 +353,20 @@ export function CameraOverlay({ emp, outlet, onClose, onDone }: {
               </div>
               <div>
                 <p className="text-[10px] text-slate-400 uppercase">Lokasi</p>
-                <p className="text-white text-sm">{gps ? (geofenceLabel(outlet, gps)) : 'Menunggu GPS...'}</p>
+                {gps ? (
+                  <p className="text-white text-sm">{geofenceLabel(outlet, gps)}</p>
+                ) : gpsState === 'loading' ? (
+                  <p className="text-white/70 text-sm flex items-center justify-center gap-1.5">
+                    <span className="w-3 h-3 border-2 border-blue-300 border-t-transparent rounded-full animate-spin inline-block" />
+                    Meminta izin...
+                  </p>
+                ) : gpsState === 'error' ? (
+                  <button onClick={requestGps} className="text-amber-300 text-[11px] underline flex items-center justify-center gap-1">
+                    <MapPin size={11} /> {gpsError || 'Minta akses lokasi'}
+                  </button>
+                ) : (
+                  <button onClick={requestGps} className="text-blue-300 text-xs underline">Minta akses lokasi</button>
+                )}
               </div>
               <div>
                 <p className="text-[10px] text-slate-400 uppercase">Outlet</p>
