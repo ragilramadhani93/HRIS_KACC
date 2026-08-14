@@ -314,7 +314,7 @@ export function AttendancePage() {
   const [filterRegion, setFilterRegion] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [searchEmp, setSearchEmp]       = useState('');
-  const [outlets, setOutlets] = useState<{id:string;name:string;area_id:string}[]>([]);
+  const [outlets, setOutlets] = useState<{id:string;name:string;area_id:string;latitude?:number|null;longitude?:number|null;geofence_radius_meters?:number|null}[]>([]);
   const [areas,   setAreas]   = useState<{id:string;name:string;region_id:string}[]>([]);
   const [regions, setRegions] = useState<{id:string;name:string}[]>([]);
 
@@ -350,7 +350,7 @@ export function AttendancePage() {
 
     // Load org filters
     const [{ data: oData }, { data: aData }, { data: rData }] = await Promise.all([
-      supabase.from('outlets').select('id, name, area_id').eq('is_active', true).order('name'),
+      supabase.from('outlets').select('id, name, area_id, latitude, longitude, geofence_radius_meters').eq('is_active', true).order('name'),
       supabase.from('areas').select('id, name, region_id').eq('is_active', true).order('name'),
       supabase.from('regions').select('id, name').order('name'),
     ]);
@@ -378,6 +378,47 @@ export function AttendancePage() {
   };
 
   useEffect(() => { loadData(); }, [dateFilter, dateFrom, dateTo, rangeMode, filterOutlet, user]);
+
+  // Pemetaan koordinat ke outlet (dalam radius / terdekat) untuk kolom lokasi
+  const fmtCoord = (v: number | null | undefined) => (v === null || v === undefined ? null : Number(v).toFixed(6));
+  const locationInfo = (lat: number | null, lng: number | null) => {
+    if (!fmtCoord(lat) || !fmtCoord(lng)) return null;
+    const latN = Number(lat), lngN = Number(lng);
+    const ranked = outlets
+      .filter((o) => o.latitude != null && o.longitude != null)
+      .map((o) => ({ outlet: o, dist: haversineDistance(latN, lngN, Number(o.latitude), Number(o.longitude)) }))
+      .sort((a, b) => a.dist - b.dist);
+    if (!ranked.length) return null;
+    const inside = ranked.find((r) => r.dist <= (r.outlet.geofence_radius_meters ?? 300));
+    const nearest = inside ?? ranked[0];
+    return { outlet: nearest.outlet, dist: nearest.dist, inside: !!inside };
+  };
+  const locText = (lat: number | null, lng: number | null) => {
+    const loc = locationInfo(lat, lng);
+    if (!loc) return '';
+    const coords = fmtCoord(lat) && fmtCoord(lng) ? `${fmtCoord(lat)}, ${fmtCoord(lng)}` : '';
+    const base = loc.inside ? loc.outlet.name : `${loc.outlet.name} (≈${Math.round(loc.dist)}m)`;
+    return [base, coords].filter(Boolean).join(' - ');
+  };
+  const LocationCell = (lat: number | null, lng: number | null) => {
+    const loc = locationInfo(lat, lng);
+    if (!loc) return <span className="text-slate-300">-</span>;
+    return (
+      <span className="flex flex-col gap-0.5 min-w-0">
+        <span className={`text-[11px] font-medium truncate ${loc.inside ? 'text-emerald-700' : 'text-amber-700'}`}>
+          {loc.outlet.name}{!loc.inside && ` · ≈${Math.round(loc.dist)}m`}
+        </span>
+        <a
+          href={`https://www.google.com/maps?q=${fmtCoord(lat)},${fmtCoord(lng)}`}
+          target="_blank" rel="noreferrer"
+          className="font-mono text-blue-600 hover:underline text-[10px] truncate"
+          title="Buka di Google Maps"
+        >
+          {fmtCoord(lat)}, {fmtCoord(lng)}
+        </a>
+      </span>
+    );
+  };
 
   const getGPS = () => {
     setGpsLoading(true);
@@ -519,6 +560,8 @@ export function AttendancePage() {
         'Outlet': (a.outlet as { name?: string })?.name ?? '',
         'Jam Masuk': a.check_in_time ? new Date(a.check_in_time).toLocaleTimeString('id-ID') : '',
         'Jam Keluar': a.check_out_time ? new Date(a.check_out_time).toLocaleTimeString('id-ID') : '',
+        'Lokasi Masuk': locText(a.check_in_lat, a.check_in_lng),
+        'Lokasi Keluar': locText(a.check_out_lat, a.check_out_lng),
         'Durasi (menit)': a.work_duration_minutes ?? '',
         'Status': a.status,
         'Geofence Masuk': a.check_in_geofence ?? '',
@@ -731,6 +774,8 @@ export function AttendancePage() {
             { key: 'outlet', header: 'Outlet', render: (a) => <span className="text-xs text-slate-600">{(a.outlet as { name?: string })?.name ?? '-'}</span> },
             { key: 'check_in_time', header: 'Masuk', render: (a) => a.check_in_time ? <span className="font-mono text-sm font-medium">{new Date(a.check_in_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span> : <span className="text-slate-300">-</span> },
             { key: 'check_out_time', header: 'Keluar', render: (a) => a.check_out_time ? <span className="font-mono text-sm">{new Date(a.check_out_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span> : <span className="text-slate-300">-</span> },
+            { key: 'loc_in', header: 'Lokasi Masuk', render: (a) => LocationCell(a.check_in_lat, a.check_in_lng) },
+            { key: 'loc_out', header: 'Lokasi Keluar', render: (a) => LocationCell(a.check_out_lat, a.check_out_lng) },
             {
               key: 'work_duration_minutes', header: 'Durasi',
               render: (a) => a.work_duration_minutes
