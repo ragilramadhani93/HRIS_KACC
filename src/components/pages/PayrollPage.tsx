@@ -591,7 +591,7 @@ function PayrollComponentsTab() {
       supabase.from('companies').select('id, name').eq('is_active', true),
       supabase.from('payroll_components').select('*, company:companies(name)').order('component_type').order('name'),
     ]);
-    setCompanies(c ?? []);
+    setCompanies((c as Company[]) ?? []);
     setComponents(comp ?? []);
     setLoading(false);
   };
@@ -862,7 +862,7 @@ export function PayrollPage() {
       supabase.from('companies').select('id, name').eq('is_active', true),
     ]);
     setRuns((r as PayrollRun[]) ?? []);
-    setCompanies(c ?? []);
+    setCompanies((c as Company[]) ?? []);
     setLoading(false);
   };
 

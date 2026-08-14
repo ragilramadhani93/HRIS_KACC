@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import type { Session, User } from './localDb';
+import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { UserProfile, AppRole } from './database.types';
 

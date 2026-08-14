@@ -29,7 +29,7 @@ function ExpenseCategoriesTab() {
       supabase.from('companies').select('id, name').eq('is_active', true),
     ]);
     setCategories(cat ?? []);
-    setCompanies(c ?? []);
+    setCompanies((c as Company[]) ?? []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);

@@ -35,8 +35,8 @@ function ShiftTemplatesTab() {
       supabase.from('shift_templates').select('*, company:companies(name)').order('name'),
       supabase.from('companies').select('id, name').eq('is_active', true),
     ]);
-    setShifts(s ?? []);
-    setCompanies(c ?? []);
+    setShifts((s as ShiftTemplate[]) ?? []);
+    setCompanies((c as Company[]) ?? []);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -152,7 +152,7 @@ function OutletScheduleTab() {
       supabase.from('areas').select('id, name').eq('is_active', true).order('name'),
     ]);
 
-    setShifts(shiftData ?? []);
+    setShifts((shiftData as ShiftTemplate[]) ?? []);
     setAreas(areaData ?? []);
 
     const rows: ScheduleRow[] = (outletData ?? []).map((o: any) => ({
@@ -482,7 +482,7 @@ function ShiftAssignmentsTab() {
     ]);
     setAssignments((a as ShiftAssignment[]) ?? []);
     setEmployees((e as Employee[]) ?? []);
-    setShifts(s ?? []);
+    setShifts((s as ShiftTemplate[]) ?? []);
     setOutlets(o ?? []);
     setLoading(false);
   };

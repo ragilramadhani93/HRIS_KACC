@@ -138,8 +138,8 @@ function RegionsTab() {
       supabase.from('regions').select('*, company:companies(name)').order('name'),
       supabase.from('companies').select('id, name').eq('is_active', true),
     ]);
-    setRegions(r ?? []);
-    setCompanies(c ?? []);
+    setRegions((r as Region[]) ?? []);
+    setCompanies((c as Company[]) ?? []);
     setLoading(false);
   };
 
@@ -239,8 +239,8 @@ function AreasTab() {
       supabase.from('areas').select('*, region:regions(name, company:companies(name))').order('name'),
       supabase.from('regions').select('id, name').eq('is_active', true),
     ]);
-    setAreas(a ?? []);
-    setRegions(r ?? []);
+    setAreas((a as Area[]) ?? []);
+    setRegions((r as Region[]) ?? []);
     setLoading(false);
   };
 
@@ -343,7 +343,7 @@ function OutletsTab() {
       supabase.from('areas').select('id, name').eq('is_active', true),
     ]);
     setOutlets(o ?? []);
-    setAreas(a ?? []);
+    setAreas((a as Area[]) ?? []);
     setLoading(false);
   };
 

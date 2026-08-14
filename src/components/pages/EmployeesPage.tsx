@@ -285,7 +285,7 @@ export function EmployeesPage() {
       supabase.from('areas').select('id, name, region_id').eq('is_active', true).order('name'),
       supabase.from('outlets').select('id, name, area_id').eq('is_active', true).order('name'),
     ]);
-    setAllCompanies(c ?? []);
+    setAllCompanies((c as Company[]) ?? []);
     setAllRegions(r as Region[] ?? []);
     setAllAreas(a as Area[] ?? []);
     setAllOutlets(o as Outlet[] ?? []);

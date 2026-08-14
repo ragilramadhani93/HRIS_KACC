@@ -60,7 +60,7 @@ export function LeavePage() {
       supabase.from('outlets').select('id, name').eq('is_active', true).order('name'),
     ]);
     setRequests((req as AbsenceRequest[]) ?? []);
-    setOutlets(outs ?? []);
+    setOutlets((outs as Outlet[]) ?? []);
 
     if (user) {
       const { data: emp } = await supabase.from('employees').select('*').eq('user_id', user.id).maybeSingle();
