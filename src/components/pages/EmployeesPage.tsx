@@ -205,6 +205,14 @@ function EmployeeDetail({ employee, onClose, onEdit }: { employee: Employee; onC
 
       {activeTab === 'salary' && (
         <div className="space-y-3 text-sm">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge className={employee.salary_scheme === 'daily' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'}>
+              {employee.salary_scheme === 'daily' ? 'Gaji Harian' : 'Gaji Bulanan'}
+            </Badge>
+            {employee.salary_scheme === 'daily' && (
+              <span className="text-xs text-slate-500">Tarif harian mengikuti Tarif Area (Payroll → Tarif Area)</span>
+            )}
+          </div>
           <div className="bg-blue-50 rounded-xl p-4">
             <p className="text-xs font-medium text-slate-500 mb-1">Basic Salary</p>
             <p className="text-2xl font-bold text-blue-700">{formatCurrency(employee.basic_salary)}</p>
@@ -338,7 +346,7 @@ export function EmployeesPage() {
       status: form.status as EmployeeStatus,
       basic_salary: parseFloat(form.basic_salary) || 0,
       salary_scheme: (form.salary_scheme as 'monthly' | 'daily') || 'monthly',
-      daily_rate: parseFloat(form.daily_rate) || 0,
+      daily_rate: (form.salary_scheme as 'monthly' | 'daily') === 'daily' ? 0 : (parseFloat(form.daily_rate) || 0),
       npwp: form.npwp || null,
     };
     const op = editing ? supabase.from('employees').update(payload).eq('id', editing.id) : supabase.from('employees').insert(payload);
@@ -537,12 +545,15 @@ export function EmployeesPage() {
               value={form.salary_scheme ?? 'monthly'}
               onChange={(e) => setForm({ ...form, salary_scheme: e.target.value })}
               options={[{ value: 'monthly', label: 'Bulanan (Basic Salary)' }, { value: 'daily', label: 'Harian (Gaji Per Hari Masuk)' }]}
-              hint="Gaji harian: dibayar sesuai hari kehadiran. Bulanan: dibayar penuh + potongan absen."
+              hint="Gaji harian: dibayar sesuai hari kehadiran, tarif otomatis mengikuti Tarif Area. Bulanan: dibayar penuh + potongan absen."
             />
             {(form.salary_scheme ?? 'monthly') === 'monthly' ? (
               <Input label="Gaji Pokok / Basic Salary (IDR)" type="number" value={form.basic_salary} onChange={(e) => setForm({ ...form, basic_salary: e.target.value })} leftIcon={<DollarSign size={14} />} hint="Gaji bulanan penuh" />
             ) : (
-              <Input label="Tarif Harian (IDR)" type="number" value={form.daily_rate ?? '0'} onChange={(e) => setForm({ ...form, daily_rate: e.target.value })} leftIcon={<DollarSign size={14} />} hint="Akan digantikan oleh Tarif Area jika ada. Kelola di menu Payroll > Tarif Area." />
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
+                <p className="font-semibold flex items-center gap-1.5"><DollarSign size={14} /> Tarif harian otomatis mengikuti Tarif Area</p>
+                <p className="text-xs text-blue-700 mt-1">Karyawan harian dibayar sesuai tarif di menu <strong>Payroll → Tarif Area</strong> (berdasarkan area & jabatan). Tidak perlu mengisi tarif di sini.</p>
+              </div>
             )}
             <Input label="NPWP" value={form.npwp} onChange={(e) => setForm({ ...form, npwp: e.target.value })} placeholder="XX.XXX.XXX.X-XXX.XXX" />
             <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-600 space-y-1">

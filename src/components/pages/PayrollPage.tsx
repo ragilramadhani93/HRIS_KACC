@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Play, CheckCircle, DollarSign, Eye, Settings, FileText, Printer, Edit2, Download, Search } from 'lucide-react';
+import { Plus, Play, CheckCircle, DollarSign, Eye, Settings, FileText, Printer, Edit2, Download, Search, Trash2 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input, Select, Textarea } from '../ui/Input';
 import { Table } from '../ui/Table';
@@ -307,10 +307,10 @@ function PaySlipModal({ item, periodLabel, onClose }: { item: PayrollItem; perio
         {isDaily && (
           <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-center justify-between text-sm">
             <div className="text-blue-700">
-              <span className="font-semibold">Skema Harian: </span>
-              {formatCurrency(empDetail?.daily_rate ?? 0)} × {item.present_days + item.late_days} hari hadir
+              <span className="font-semibold">Skema Harian (Tarif Area): </span>
+              {formatCurrency(item.basic_salary)} × {item.present_days + item.late_days} hari hadir
             </div>
-            <span className="font-bold text-blue-800">{formatCurrency((empDetail?.daily_rate ?? 0) * (item.present_days + item.late_days))}</span>
+            <span className="font-bold text-blue-800">{formatCurrency(item.basic_salary * (item.present_days + item.late_days))}</span>
           </div>
         )}
 
@@ -423,7 +423,7 @@ function PayrollItemsModal({ run, onClose }: { run: PayrollRun; onClose: () => v
         'Nama': emp?.full_name ?? '',
         'Jabatan': emp?.job_title ?? '',
         'Skema': emp?.salary_scheme === 'daily' ? 'Harian' : 'Bulanan',
-        'Tarif': emp?.salary_scheme === 'daily' ? (emp?.daily_rate ?? 0) : (emp?.basic_salary ?? 0),
+        'Tarif': emp?.salary_scheme === 'daily' ? (i.basic_salary ?? 0) : (emp?.basic_salary ?? 0),
         'Hari Kerja': i.work_days,
         'Hari Hadir': i.present_days,
         'Terlambat': i.late_days,
@@ -516,7 +516,7 @@ function PayrollItemsModal({ run, onClose }: { run: PayrollRun; onClose: () => v
                         {isDaily ? 'Harian' : 'Bulanan'}
                       </span>
                       <p className="text-xs text-slate-500 mt-1">
-                        {isDaily ? `${formatCurrency(emp?.daily_rate ?? 0)}/hari` : formatCurrency(emp?.basic_salary ?? 0)}
+                        {isDaily ? `${formatCurrency(item.basic_salary)}/hari (Tarif Area)` : formatCurrency(emp?.basic_salary ?? 0)}
                       </p>
                     </td>
                     <td className="px-4 py-3">
@@ -540,7 +540,7 @@ function PayrollItemsModal({ run, onClose }: { run: PayrollRun; onClose: () => v
                       <p className="font-medium text-emerald-700">{formatCurrency(item.total_earnings)}</p>
                       {isDaily && (
                         <p className="text-xs text-slate-400">
-                          {item.present_days + item.late_days} hari × {formatCurrency(emp?.daily_rate ?? 0)}
+                          {item.present_days + item.late_days} hari × {formatCurrency(item.basic_salary)}
                         </p>
                       )}
                     </td>
@@ -607,6 +607,12 @@ function PayrollComponentsTab() {
     setSaving(false);
   };
 
+  const handleDelete = async (comp: PayrollComponent) => {
+    if (!confirm(`Hapus komponen gaji "${comp.name}" (${comp.code})? Komponen ini tidak akan dipakai lagi pada proses payroll berikutnya.`)) return;
+    const { error } = await supabase.from('payroll_components').delete().eq('id', comp.id);
+    if (error) { toast('error', 'Gagal menghapus', error.message); } else { toast('success', 'Komponen gaji dihapus'); load(); }
+  };
+
   const typeColors: Record<string, string> = { earning: 'bg-emerald-100 text-emerald-700', deduction: 'bg-red-100 text-red-700', benefit: 'bg-blue-100 text-blue-700' };
 
   return (
@@ -623,7 +629,12 @@ function PayrollComponentsTab() {
         { key: 'default_amount', header: 'Default Amount', render: (c) => formatCurrency(c.default_amount) },
         { key: 'is_taxable', header: 'Taxable', render: (c) => c.is_taxable ? <Badge className="bg-amber-100 text-amber-700">Yes</Badge> : <span className="text-slate-400 text-sm">No</span> },
         { key: 'is_active', header: 'Status', render: (c) => <Badge className={c.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}>{c.is_active ? 'Active' : 'Inactive'}</Badge> },
-        { key: 'actions', header: '', render: (c) => <Button size="sm" variant="ghost" onClick={() => { setEditing(c); setForm({ company_id: c.company_id, name: c.name, code: c.code, component_type: c.component_type, is_taxable: c.is_taxable, is_fixed: c.is_fixed, default_amount: c.default_amount.toString() }); setModalOpen(true); }}><Settings size={14} /></Button> },
+        { key: 'actions', header: '', render: (c) => (
+          <div className="flex items-center gap-0.5">
+            <Button size="sm" variant="ghost" title="Edit komponen" onClick={() => { setEditing(c); setForm({ company_id: c.company_id, name: c.name, code: c.code, component_type: c.component_type, is_taxable: c.is_taxable, is_fixed: c.is_fixed, default_amount: c.default_amount.toString() }); setModalOpen(true); }}><Edit2 size={14} /></Button>
+            <Button size="sm" variant="ghost" title="Hapus komponen" className="text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(c)}><Trash2 size={14} /></Button>
+          </div>
+        ) },
       ]} />
       <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title={editing ? 'Edit Component' : 'Add Component'} size="sm"
         footer={<><Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button><Button loading={saving} onClick={handleSave}>Save</Button></>}
