@@ -810,7 +810,21 @@ function BulkIncentiveUploadModal({ isOpen, onClose, employees, filterYear, filt
       <div className="space-y-4">
         {/* Instructions */}
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
-          <p className="font-semibold mb-1">Format file (CSV atau Excel):</p>
+          <div className="flex items-center justify-between mb-1">
+            <p className="font-semibold">Format file (CSV atau Excel):</p>
+            <Button size="sm" variant="outline" className="text-xs"
+              onClick={() => {
+                const header = 'kode_karyawan,jenis,nominal,catatan';
+                const sample1 = 'KACC001,penjualan,500000,Bonus Maret';
+                const sample2 = 'KACC002,prestasi,300000,Prestasi Q1';
+                const blob = new Blob([header + '\n' + sample1 + '\n' + sample2 + '\n'], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = 'template_insentif.csv'; a.click();
+                URL.revokeObjectURL(url);
+              }}
+            >Download Template</Button>
+          </div>
           <p className="text-xs text-blue-600 mb-2">Kolom wajib: <code>kode_karyawan</code>, <code>jenis</code> (penjualan/prestasi), <code>nominal</code></p>
           <p className="text-xs text-blue-600">Kolom opsional: <code>catatan</code></p>
           <p className="text-xs text-blue-600 mt-1.5">Contoh CSV:</p>
