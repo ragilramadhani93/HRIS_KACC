@@ -1,0 +1,17 @@
+{
+  "name": "Kapal Api Coffee Corner",
+  "short_name": "Kapal Api",
+  "description": "Enterprise Workforce Management Platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#681c33",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/kapal-api-logo.png",
+      "sizes": "230x266",
+      "type": "image/png"
+    }
+  ]
+}
