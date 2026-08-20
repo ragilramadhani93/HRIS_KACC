@@ -53,21 +53,30 @@ function OverviewTab({ companyId, year, month }: { companyId: string; year: numb
     const periodEnd   = `${year}-${String(month).padStart(2, '0')}-31`;
     const todayStr    = new Date().toISOString().split('T')[0];
 
-    Promise.all([
-      supabase.from('employees').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
-      supabase.from('employees').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'active'),
-      supabase.from('outlets').select('id', { count: 'exact', head: true }),
-      supabase.from('attendance').select('status').eq('attendance_date', todayStr).in('employee_id',
-        supabase.from('employees').select('id').eq('company_id', companyId) as any),
-      supabase.from('attendance').select('attendance_date, status')
-        .gte('attendance_date', periodStart).lte('attendance_date', periodEnd)
-        .in('employee_id', supabase.from('employees').select('id').eq('company_id', companyId) as any),
-      supabase.from('employees').select('department').eq('company_id', companyId),
-      supabase.from('overtime_requests').select('duration_hours')
-        .gte('overtime_date', periodStart).lte('overtime_date', periodEnd).eq('status', 'approved')
-        .in('employee_id', supabase.from('employees').select('id').eq('company_id', companyId) as any),
-      supabase.from('payroll_runs').select('total_net').eq('company_id', companyId).eq('period_year', year).eq('period_month', month),
-    ]).then(([
+    // First fetch employee IDs for this company, then use the array in .in()
+    supabase.from('employees').select('id').eq('company_id', companyId).then(({ data: empIds }) => {
+      const ids = (empIds ?? []).map((e) => e.id);
+      return Promise.all([
+        supabase.from('employees').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
+        supabase.from('employees').select('id', { count: 'exact', head: true }).eq('company_id', companyId).eq('status', 'active'),
+        supabase.from('outlets').select('id', { count: 'exact', head: true }),
+        ids.length > 0
+          ? supabase.from('attendance').select('status').eq('attendance_date', todayStr).in('employee_id', ids)
+          : Promise.resolve({ data: [] as any[] }),
+        ids.length > 0
+          ? supabase.from('attendance').select('attendance_date, status')
+              .gte('attendance_date', periodStart).lte('attendance_date', periodEnd)
+              .in('employee_id', ids)
+          : Promise.resolve({ data: [] as any[] }),
+        supabase.from('employees').select('department').eq('company_id', companyId),
+        ids.length > 0
+          ? supabase.from('overtime_requests').select('duration_hours')
+              .gte('overtime_date', periodStart).lte('overtime_date', periodEnd).eq('status', 'approved')
+              .in('employee_id', ids)
+          : Promise.resolve({ data: [] as any[] }),
+        supabase.from('payroll_runs').select('total_net').eq('company_id', companyId).eq('period_year', year).eq('period_month', month),
+      ]);
+    }).then(([
       { count: total }, { count: active }, { count: outletCnt },
       { data: todayAtt }, { data: attData },
       { data: empDept }, { data: otData }, { data: payData },
@@ -349,20 +358,29 @@ function AttendanceReportTab({ companyId, year, month }: { companyId: string; ye
   useEffect(() => {
     if (!companyId) return;
     setLoading(true);
-    Promise.all([
-      supabase.from('employees').select('id, area_id, full_name, employee_code, job_title, department, salary_scheme, daily_rate, basic_salary, primary_outlet:outlets!primary_outlet_id(id, name)').eq('company_id', companyId).eq('status', 'active').order('full_name'),
-      supabase.from('attendance').select('employee_id, attendance_date, check_in_time, check_out_time, status, work_duration_minutes, check_in_geofence, check_in_lat, check_in_lng, check_out_lat, check_out_lng').gte('attendance_date', periodStart).lte('attendance_date', periodEnd).in('employee_id', supabase.from('employees').select('id').eq('company_id', companyId) as any),
-      supabase.from('outlets').select('id, name').eq('is_active', true).order('name'),
-      supabase.from('area_salary_rates').select('*, area:areas(id)').eq('is_active', true),
-      supabase.from('outlets').select('id, name, latitude, longitude, geofence_radius_meters'),
-    ]).then(([{ data: emps }, { data: att }, { data: outs }, { data: rates }, { data: geoOutlets }]) => {
-      setEmployees(emps ?? []);
-      setAttendance(att ?? []);
-      setOutlets(outs ?? []);
-      setRates(rates ?? []);
-      setGeoOutlets(geoOutlets ?? []);
-      setLoading(false);
-    });
+    // Fetch employees first, then use their IDs in the attendance query
+    supabase.from('employees')
+      .select('id, area_id, full_name, employee_code, job_title, department, salary_scheme, daily_rate, basic_salary, primary_outlet:outlets!primary_outlet_id(id, name)')
+      .eq('company_id', companyId).eq('status', 'active').order('full_name')
+      .then(({ data: emps }) => {
+        setEmployees(emps ?? []);
+        const ids = (emps ?? []).map((e) => e.id);
+        return Promise.all([
+          ids.length > 0
+            ? supabase.from('attendance').select('employee_id, attendance_date, check_in_time, check_out_time, status, work_duration_minutes, check_in_geofence, check_in_lat, check_in_lng, check_out_lat, check_out_lng').gte('attendance_date', periodStart).lte('attendance_date', periodEnd).in('employee_id', ids)
+            : Promise.resolve({ data: [] as any[] }),
+          supabase.from('outlets').select('id, name').eq('is_active', true).order('name'),
+          supabase.from('area_salary_rates').select('*, area:areas(id)').eq('is_active', true),
+          supabase.from('outlets').select('id, name, latitude, longitude, geofence_radius_meters'),
+        ]);
+      })
+      .then(([{ data: att }, { data: outs }, { data: rates }, { data: geoOutlets }]) => {
+        setAttendance(att ?? []);
+        setOutlets(outs ?? []);
+        setRates(rates ?? []);
+        setGeoOutlets(geoOutlets ?? []);
+        setLoading(false);
+      });
   }, [companyId, year, month]);
 
   const exportExcel = async () => {
