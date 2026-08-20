@@ -1,5 +1,5 @@
 /**
- * KACC HRIS database client.
+ * KACC HRIS database client. (v2)
  *
  * When Supabase credentials are configured (VITE_SUPABASE_URL +
  * VITE_SUPABASE_ANON_KEY, paste them in the project's Keys / API keys tab),
