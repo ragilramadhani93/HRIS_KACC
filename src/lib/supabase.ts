@@ -1,31 +1,20 @@
 /**
- * KACC HRIS database client. (v2)
+ * KACC HRIS database client.
  *
- * When Supabase credentials are configured (VITE_SUPABASE_URL +
- * VITE_SUPABASE_ANON_KEY, paste them in the project's Keys / API keys tab),
- * this connects to your hosted Supabase project so every device shares the
- * same data: admin web app + employee Android APK (face recognition login,
- * attendance, leave, payslips).
- *
- * While credentials are missing it falls back to the built-in browser-local
- * demo database (./localDb.ts) so the app still works for preview/testing.
- *
- * Required setup:
- *   1. Create a Supabase project, then run every file in supabase/migrations/
- *      (in order) in the SQL editor — this creates all tables, RLS policies
- *      and storage buckets used by the app.
- *   2. Paste VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY into Keys.
+ * Uses hosted Supabase for shared data across web admin + Android APK.
+ * Credentials are read from VITE env vars at build time; when those are
+ * unavailable the hardcoded production values are used as fallback.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { LocalDatabase } from './localDb';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+// Production Supabase project credentials
+const PROD_SUPABASE_URL = 'https://ujtzsuqzpuplebfyqvmd.supabase.co';
+const PROD_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVqdHpzdXF6cHVwbGViZnlxdm1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTk4NjIsImV4cCI6MjEwMjI3NTg2Mn0.WgcFdKSUeIZ7Genm14KIYt3XahAFX_G606EQbDBNZAo';
 
-// Typed as the real Supabase client: the app only uses the standard
-// supabase-js API surface (from().select chains, auth, storage, channel).
-// The local demo database implements the same surface, so it satisfies the
-// type only via a cast (it is never used when credentials are configured).
+const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || PROD_SUPABASE_URL;
+const supabaseAnonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || PROD_SUPABASE_ANON_KEY;
+
 export const supabase: SupabaseClient<any, 'public', any> =
   supabaseUrl && supabaseAnonKey
     ? createClient(supabaseUrl, supabaseAnonKey, {
