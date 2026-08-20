@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Play, CheckCircle, DollarSign, Eye, Settings, FileText, Printer, Edit2, Download, Search, Trash2 } from 'lucide-react';
+import { Plus, Play, CheckCircle, DollarSign, Eye, Settings, FileText, Printer, Edit2, Download, Search, Trash2, Upload } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Input, Select, Textarea } from '../ui/Input';
 import { Table } from '../ui/Table';
@@ -665,6 +665,214 @@ function PayrollComponentsTab() {
   );
 }
 
+// ─── Bulk Incentive Upload Modal ──────────────────────────
+function BulkIncentiveUploadModal({ isOpen, onClose, employees, filterYear, filterMonth, onSuccess }: {
+  isOpen: boolean;
+  onClose: () => void;
+  employees: Employee[];
+  filterYear: number;
+  filterMonth: number;
+  onSuccess: () => void;
+}) {
+  const { toast } = useToast();
+  const [rows, setRows] = useState<{ employee_code: string; employee_name: string; incentive_type: string; amount: number; notes: string; employee_id: string; error?: string }[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    let records: { employee_code: string; incentive_type: string; amount: number; notes: string }[] = [];
+
+    try {
+      if (file.name.endsWith('.csv')) {
+        const text = await file.text();
+        const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+        if (lines.length < 2) { toast('error', 'File CSV minimal harus ada header + 1 baris data'); return; }
+        const header = lines[0].toLowerCase();
+        // Detect columns: kode_karyawan/kode/nip/employee_code, jenis/type/incentive_type, nominal/amount, catatan/notes
+        const cols = header.split(',').map((c) => c.trim());
+        const codeIdx = cols.findIndex((c) => ['kode_karyawan', 'kode', 'nip', 'employee_code', 'code'].includes(c));
+        const typeIdx = cols.findIndex((c) => ['jenis', 'type', 'incentive_type', 'tipe'].includes(c));
+        const amtIdx = cols.findIndex((c) => ['nominal', 'amount', 'jumlah', 'nilai'].includes(c));
+        const notesIdx = cols.findIndex((c) => ['catatan', 'notes', 'keterangan', 'note'].includes(c));
+        if (codeIdx < 0 || typeIdx < 0 || amtIdx < 0) {
+          toast('error', 'Header CSV harus mengandung kolom: kode_karyawan, jenis, nominal');
+          return;
+        }
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(',').map((p) => p.trim());
+          const rawType = (parts[typeIdx] ?? '').toLowerCase().trim();
+          const incentiveType = rawType.includes('penjualan') || rawType === 'sales' ? 'sales' : rawType.includes('prestasi') || rawType === 'achievement' ? 'achievement' : '';
+          if (!incentiveType) continue; // skip non-sales/achievement
+          records.push({
+            employee_code: parts[codeIdx] ?? '',
+            incentive_type: incentiveType,
+            amount: parseFloat((parts[amtIdx] ?? '0').replace(/[^\d.-]/g, '')) || 0,
+            notes: notesIdx >= 0 ? (parts[notesIdx] ?? '') : '',
+          });
+        }
+      } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        const XLSX = await import('xlsx');
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
+        for (const row of json) {
+          // Try to find columns by common header names
+          const getVal = (keys: string[]) => {
+            for (const k of keys) {
+              const match = Object.keys(row).find((rk) => rk.toLowerCase().trim() === k.toLowerCase());
+              if (match !== undefined) return String(row[match]);
+            }
+            return '';
+          };
+          const rawType = getVal(['jenis', 'type', 'incentive_type', 'tipe']).toLowerCase().trim();
+          const incentiveType = rawType.includes('penjualan') || rawType === 'sales' ? 'sales' : rawType.includes('prestasi') || rawType === 'achievement' ? 'achievement' : '';
+          if (!incentiveType) continue;
+          records.push({
+            employee_code: getVal(['kode_karyawan', 'kode', 'nip', 'employee_code', 'code']),
+            incentive_type: incentiveType,
+            amount: parseFloat(getVal(['nominal', 'amount', 'jumlah', 'nilai']).replace(/[^\d.-]/g, '')) || 0,
+            notes: getVal(['catatan', 'notes', 'keterangan', 'note']),
+          });
+        }
+      } else {
+        toast('error', 'Format file tidak didukung. Gunakan .csv atau .xlsx');
+        return;
+      }
+    } catch (err) {
+      toast('error', 'Gagal membaca file', (err as Error).message);
+      return;
+    }
+
+    if (records.length === 0) {
+      toast('error', 'Tidak ditemukan data insentif penjualan/prestasi di file');
+      return;
+    }
+
+    // Match employee codes to IDs
+    const empMap = new Map(employees.map((e) => [e.employee_code, e]));
+    const mapped = records.map((r) => {
+      const emp = empMap.get(r.employee_code);
+      return {
+        ...r,
+        employee_id: emp?.id ?? '',
+        employee_name: emp?.full_name ?? '???',
+        error: !emp ? 'Kode karyawan tidak ditemukan' : r.amount <= 0 ? 'Nominal harus > 0' : undefined,
+      };
+    });
+
+    setRows(mapped);
+  };
+
+  const handleSave = async () => {
+    const valid = rows.filter((r) => !r.error);
+    if (valid.length === 0) return toast('error', 'Tidak ada data valid untuk disimpan');
+    setSaving(true);
+    setProgress({ done: 0, total: valid.length });
+    let errors = 0;
+    for (const r of valid) {
+      const { error } = await supabase.from('incentive_records').upsert({
+        employee_id: r.employee_id,
+        incentive_type: r.incentive_type,
+        period_year: filterYear,
+        period_month: filterMonth,
+        amount: r.amount,
+        notes: r.notes || null,
+        qualified: true,
+      }, { onConflict: 'employee_id,incentive_type,period_year,period_month' });
+      if (error) errors++;
+      setProgress((p) => ({ ...p, done: p.done + 1 }));
+    }
+    if (errors > 0) toast('warning', `${valid.length - errors} berhasil, ${errors} gagal`);
+    else toast('success', `${valid.length} insentif berhasil disimpan`);
+    setSaving(false);
+    onSuccess();
+  };
+
+  const validCount = rows.filter((r) => !r.error).length;
+  const errorCount = rows.filter((r) => r.error).length;
+
+  const typeColors: Record<string, string> = { sales: 'bg-emerald-100 text-emerald-700', achievement: 'bg-blue-100 text-blue-700' };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Bulk Upload Insentif" size="lg"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>Batal</Button>
+          <Button onClick={handleSave} loading={saving} disabled={validCount === 0 || saving}>
+            {saving ? `Menyimpan ${progress.done}/${progress.total}...` : `Simpan ${validCount} Insentif`}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {/* Instructions */}
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
+          <p className="font-semibold mb-1">Format file (CSV atau Excel):</p>
+          <p className="text-xs text-blue-600 mb-2">Kolom wajib: <code>kode_karyawan</code>, <code>jenis</code> (penjualan/prestasi), <code>nominal</code></p>
+          <p className="text-xs text-blue-600">Kolom opsional: <code>catatan</code></p>
+          <p className="text-xs text-blue-600 mt-1.5">Contoh CSV:</p>
+          <pre className="text-xs bg-white border border-blue-200 rounded-lg p-2 mt-1 font-mono">kode_karyawan,jenis,nominal,catatan
+KACC001,penjualan,500000,Bonus Maret
+KACC002,prestasi,300000,Prestasi Q1</pre>
+        </div>
+
+        {/* File input */}
+        <div className="flex items-center gap-3">
+          <label className="flex-1">
+            <div className="border-2 border-dashed border-slate-300 rounded-xl px-4 py-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors">
+              <Upload size={24} className="mx-auto text-slate-400 mb-2" />
+              <p className="text-sm text-slate-600 font-medium">Klik untuk pilih file .csv atau .xlsx</p>
+              <p className="text-xs text-slate-400 mt-1">Maksimal 1000 baris</p>
+            </div>
+            <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleFile} />
+          </label>
+        </div>
+
+        {/* Preview table */}
+        {rows.length > 0 && (
+          <>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-slate-700">Preview: {rows.length} baris ditemukan</p>
+              <div className="flex gap-2 text-xs">
+                <span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">{validCount} valid</span>
+                {errorCount > 0 && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full">{errorCount} error</span>}
+              </div>
+            </div>
+            <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-xl border border-slate-100">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-100 sticky top-0">
+                  <tr>
+                    {['Kode', 'Nama', 'Jenis', 'Nominal', 'Catatan', 'Status'].map((h) => (
+                      <th key={h} className="text-left px-3 py-2 text-xs font-semibold text-slate-500 uppercase">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {rows.map((r, i) => (
+                    <tr key={i} className={r.error ? 'bg-red-50' : 'hover:bg-slate-50'}>
+                      <td className="px-3 py-2 font-mono text-xs">{r.employee_code}</td>
+                      <td className="px-3 py-2 font-medium">{r.employee_name}</td>
+                      <td className="px-3 py-2"><Badge className={typeColors[r.incentive_type]}>{r.incentive_type === 'sales' ? 'Penjualan' : 'Prestasi'}</Badge></td>
+                      <td className="px-3 py-2 font-medium text-emerald-700">{formatCurrency(r.amount)}</td>
+                      <td className="px-3 py-2 text-xs text-slate-500">{r.notes || '-'}</td>
+                      <td className="px-3 py-2">
+                        {r.error ? <span className="text-xs text-red-600">{r.error}</span> : <Badge className="bg-emerald-100 text-emerald-700">OK</Badge>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Main Payroll Page ──────────────────────────────────────
 // ─── Incentives Tab ─────────────────────────────────────────
 function IncentivesTab() {
@@ -680,6 +888,7 @@ function IncentivesTab() {
   const [filterYear, setFilterYear] = useState(currentYear);
   const [filterMonth, setFilterMonth] = useState(currentMonth);
   const [form, setForm] = useState({ employee_id: '', incentive_type: 'sales', amount: '', notes: '', period_year: String(currentYear), period_month: String(currentMonth) });
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -729,9 +938,14 @@ function IncentivesTab() {
           <Select value={String(filterMonth)} onChange={(e) => setFilterMonth(parseInt(e.target.value))} options={monthOptions} className="w-36" />
           <Select value={String(filterYear)} onChange={(e) => setFilterYear(parseInt(e.target.value))} options={yearOptions} className="w-28" />
         </div>
-        <Button onClick={() => { setEditing(null); setForm({ employee_id: '', incentive_type: 'sales', amount: '', notes: '', period_year: String(filterYear), period_month: String(filterMonth) }); setModalOpen(true); }}>
-          <Plus size={16} /> Input Insentif Manual
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setBulkOpen(true)}>
+            <Upload size={16} /> Bulk Upload
+          </Button>
+          <Button onClick={() => { setEditing(null); setForm({ employee_id: '', incentive_type: 'sales', amount: '', notes: '', period_year: String(filterYear), period_month: String(filterMonth) }); setModalOpen(true); }}>
+            <Plus size={16} /> Input Insentif Manual
+          </Button>
+        </div>
       </div>
 
       <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 text-sm text-amber-800">
@@ -772,6 +986,16 @@ function IncentivesTab() {
           <Input label="Catatan" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         </div>
       </Modal>
+
+      {/* ─── Bulk Upload Modal ─────────────────────────── */}
+      <BulkIncentiveUploadModal
+        isOpen={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        employees={employees}
+        filterYear={filterYear}
+        filterMonth={filterMonth}
+        onSuccess={() => { setBulkOpen(false); load(); }}
+      />
     </>
   );
 }
