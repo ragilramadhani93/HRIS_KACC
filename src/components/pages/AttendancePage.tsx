@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Camera, CheckCircle, AlertCircle, MapPin, RefreshCw, X, ShieldCheck, ShieldX, Clock, Download, Search, Filter } from 'lucide-react';
+import { Camera, CheckCircle, AlertCircle, MapPin, RefreshCw, X, ShieldCheck, ShieldX, Clock, Download, Search, Filter, Upload } from 'lucide-react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -85,6 +85,10 @@ export function FaceRegistrationPage() {
   const [capturing, setCapturing] = useState<'front' | 'left' | 'right' | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const fileInputFront = useRef<HTMLInputElement | null>(null);
+  const fileInputLeft = useRef<HTMLInputElement | null>(null);
+  const fileInputRight = useRef<HTMLInputElement | null>(null);
+  const fileInputs = { front: fileInputFront, left: fileInputLeft, right: fileInputRight };
   // Admin verification
   const [verifyModal, setVerifyModal] = useState<{ empId: string; name: string; profile: { photo_front_url?: string | null; photo_left_url?: string | null; photo_right_url?: string | null; id: string } } | null>(null);
   const { role } = useAuth();
@@ -186,10 +190,28 @@ export function FaceRegistrationPage() {
                 </div>
                 <p className="text-sm font-medium">{label}</p>
                 <p className="text-xs text-slate-400 text-center">{hint}</p>
-                <Button size="sm" variant={photos[key] ? 'secondary' : 'primary'} onClick={() => setCapturing(key)}>
-                  {photos[key] ? <RefreshCw size={12} /> : <Camera size={12} />}
-                  {photos[key] ? 'Retake' : 'Capture'}
-                </Button>
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant={photos[key] ? 'secondary' : 'primary'} onClick={() => setCapturing(key)}>
+                    {photos[key] ? <RefreshCw size={12} /> : <Camera size={12} />}
+                    {photos[key] ? 'Retake' : 'Capture'}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => fileInputs[key].current?.click()}>
+                    <Upload size={12} /> Upload
+                  </Button>
+                  <input
+                    ref={fileInputs[key] as React.RefObject<HTMLInputElement>}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const blob = new Blob([await file.arrayBuffer()], { type: file.type });
+                      await handleCapture(key, blob);
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
                 {photos[key] && <CheckCircle size={16} className="text-emerald-500" />}
               </div>
             ))}
